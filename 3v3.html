@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard 3v3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body data-mode="3v3">
+  <div class="app-shell">
+    <header class="hero-panel">
+      <div>
+        <p class="eyebrow">Dashboard personale</p>
+        <h1>Monitora le tue partite 3v3</h1>
+        <p>Registra le tue performance in 3v3, controlla il trend dei punti e tieni aggiornato il punteggio attuale.</p>
+        <div class="page-nav">
+          <a href="index.html">1v1</a>
+          <a href="2v2.html">2v2</a>
+          <a href="3v3.html" class="active">3v3</a>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span id="currentScore">0</span>
+          <small>Punteggio attuale</small>
+        </div>
+        <div class="stat-card">
+          <span id="totalGames">0</span>
+          <small>Partite registrate</small>
+        </div>
+        <div class="stat-card">
+          <span id="averagePoints">0</span>
+          <small>Punti medi</small>
+        </div>
+      </div>
+    </header>
+
+    <section class="grid-two">
+      <article class="panel form-panel">
+        <h2>Nuovo inserimento</h2>
+        <form id="gameForm">
+          <label>Data<div><input type="date" id="date" required /></div></label>
+          <label>Punti<div><input type="number" id="points" placeholder="Punti realizzati" required /></div></label>
+          <button type="submit">Salva partita</button>
+          <div id="formMessage" class="form-message"></div>
+        </form>
+      </article>
+
+      <article class="panel chart-panel">
+        <div class="panel-header">
+          <h2>Trend punteggio totale</h2>
+          <small>Andamento del punteggio totale partita per partita</small>
+        </div>
+        <canvas id="pointsChart"></canvas>
+      </article>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-header">
+        <h2>Elenco partite</h2>
+        <button id="clearAll" class="ghost">Cancella tutto</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Punti</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="gameList"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <script src="firebase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
