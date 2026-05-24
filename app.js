@@ -17,7 +17,7 @@ const clearAll = document.getElementById('clearAll');
 const ctx = document.getElementById('pointsChart').getContext('2d');
 let chart;
 let editingId = null;
-let firestore = null;
+let realtimeDb = null;
 
 const STORAGE_KEY = `games_${mode}`;
 
@@ -36,35 +36,41 @@ function persistLocalGames(games) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
 }
 
+function setTodayAsDefaultDate() {
+  const dateInput = document.getElementById('date');
+  if (!dateInput) return;
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  dateInput.value = `${yyyy}-${mm}-${dd}`;
+}
+
 function initFirebase() {
   if (!hasFirebase) return;
   if (!firebase.apps.length) {
     firebase.initializeApp(FIREBASE_CONFIG);
   }
-  firestore = firebase.firestore();
+  realtimeDb = firebase.database();
 }
 
 async function getSavedGames() {
-  if (!firestore) {
+  if (!realtimeDb) {
     return getLocalSavedGames();
   }
 
   try {
-    const snapshot = await firestore
-      .collection('modes')
-      .doc(mode)
-      .collection('games')
-      .orderBy('date', 'asc')
-      .get();
-
-    return snapshot.docs.map(doc => {
-      const data = doc.data();
+    const snapshot = await realtimeDb.ref(`modes/${mode}/games`).once('value');
+    const gamesMap = snapshot.val() || {};
+    const games = Object.entries(gamesMap).map(([id, data]) => {
       return {
-        id: doc.id,
+        id,
         date: data.date || '',
         points: Number(data.points) || 0
       };
     });
+    games.sort((a, b) => new Date(a.date) - new Date(b.date));
+    return games;
   } catch (error) {
     showMessage('Firebase non risponde, uso localStorage.', true);
     return getLocalSavedGames();
@@ -72,15 +78,12 @@ async function getSavedGames() {
 }
 
 async function addGame(game) {
-  if (firestore) {
-    await firestore
-      .collection('modes')
-      .doc(mode)
-      .collection('games')
-      .add({
+  if (realtimeDb) {
+    const ref = realtimeDb.ref(`modes/${mode}/games`).push();
+    await ref.set({
         date: game.date,
         points: Number(game.points) || 0,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: Date.now()
       });
     return;
   }
@@ -91,16 +94,11 @@ async function addGame(game) {
 }
 
 async function updateGame(id, newData) {
-  if (firestore) {
-    await firestore
-      .collection('modes')
-      .doc(mode)
-      .collection('games')
-      .doc(String(id))
-      .update({
+  if (realtimeDb) {
+    await realtimeDb.ref(`modes/${mode}/games/${String(id)}`).update({
         date: newData.date,
         points: Number(newData.points) || 0,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: Date.now()
       });
     return;
   }
@@ -112,13 +110,8 @@ async function updateGame(id, newData) {
 }
 
 async function deleteGame(id) {
-  if (firestore) {
-    await firestore
-      .collection('modes')
-      .doc(mode)
-      .collection('games')
-      .doc(String(id))
-      .delete();
+  if (realtimeDb) {
+    await realtimeDb.ref(`modes/${mode}/games/${String(id)}`).remove();
     return;
   }
   const games = getLocalSavedGames().filter(g => g.id !== id);
@@ -126,15 +119,8 @@ async function deleteGame(id) {
 }
 
 async function clearAllGames() {
-  if (firestore) {
-    const snapshot = await firestore
-      .collection('modes')
-      .doc(mode)
-      .collection('games')
-      .get();
-    const batch = firestore.batch();
-    snapshot.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
+  if (realtimeDb) {
+    await realtimeDb.ref(`modes/${mode}/games`).remove();
     return;
   }
   localStorage.removeItem(STORAGE_KEY);
@@ -241,6 +227,7 @@ gameForm.addEventListener('submit', async event => {
       showMessage('Partita salvata con successo.', false);
     }
     gameForm.reset();
+    setTodayAsDefaultDate();
     refresh();
   } catch (error) {
     showMessage(error.message || 'Errore durante il salvataggio.');
@@ -259,12 +246,12 @@ gameList.addEventListener('click', async event => {
     if (!game) return;
     document.getElementById('date').value = game.date;
     document.getElementById('points').value = game.points;
-    editingId = firestore ? id : (Number.isNaN(localId) ? id : localId);
+    editingId = realtimeDb ? id : (Number.isNaN(localId) ? id : localId);
   }
 
   if (button.classList.contains('delete')) {
     try {
-      await deleteGame(firestore ? id : (Number.isNaN(localId) ? id : localId));
+      await deleteGame(realtimeDb ? id : (Number.isNaN(localId) ? id : localId));
       showMessage('Partita eliminata.', false);
       refresh();
     } catch (error) {
@@ -274,12 +261,14 @@ gameList.addEventListener('click', async event => {
 });
 
 initFirebase();
+setTodayAsDefaultDate();
 
 clearAll.addEventListener('click', async () => {
   try {
     await clearAllGames();
     editingId = null;
     gameForm.reset();
+    setTodayAsDefaultDate();
     refresh();
     showMessage('Tutte le partite sono state cancellate.', false);
   } catch (error) {
