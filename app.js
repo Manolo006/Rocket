@@ -157,25 +157,26 @@ function buildRow(game) {
 function updateStats(games) {
   const total = games.length;
   const points = games.map(g => Number(g.points) || 0);
-  const average = total ? Math.round(points.reduce((sum, value) => sum + value, 0) / total) : 0;
+  const balance = points.reduce((sum, value) => sum + value, 0);
+  const baseScore = currentScores[mode] ?? 0;
+  const realCurrentScore = baseScore + balance;
   totalGames.textContent = total;
-  averagePoints.textContent = average;
-  currentScore.textContent = currentScores[mode] ?? 0;
+  averagePoints.textContent = `${balance >= 0 ? '+' : ''}${balance}`;
+  currentScore.textContent = realCurrentScore;
 }
 
 function buildChart(games) {
   const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
   const deltaValues = sorted.map(g => Number(g.points) || 0);
-  const currentTotal = currentScores[mode] ?? 0;
-  const startingTotal = currentTotal - deltaValues.reduce((sum, value) => sum + value, 0);
+  const baseScore = currentScores[mode] ?? 0;
   const labels = sorted.map((game, index) => `G${index + 1} - ${game.date}`);
   const values = deltaValues.reduce((acc, points) => {
-    const last = acc.length ? acc[acc.length - 1] : startingTotal;
+    const last = acc.length ? acc[acc.length - 1] : baseScore;
     acc.push(last + points);
     return acc;
   }, []);
   const chartLabels = values.length ? labels : ['Totale attuale'];
-  const chartValues = values.length ? values : [currentTotal];
+  const chartValues = values.length ? values : [baseScore];
 
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
