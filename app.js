@@ -9,6 +9,8 @@ const hasFirebase = typeof firebase !== 'undefined' && FIREBASE_CONFIG && FIREBA
 
 const gameForm = document.getElementById('gameForm');
 const gameList = document.getElementById('gameList');
+const pointsInput = document.getElementById('points');
+const quickPoints = document.querySelectorAll('.quick-point');
 const totalGames = document.getElementById('totalGames');
 const averagePoints = document.getElementById('averagePoints');
 const currentScore = document.getElementById('currentScore');
@@ -44,6 +46,19 @@ function setTodayAsDefaultDate() {
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   dateInput.value = `${yyyy}-${mm}-${dd}`;
+}
+
+function setupQuickPoints() {
+  if (!pointsInput || !quickPoints.length) return;
+  quickPoints.forEach(button => {
+    button.addEventListener('click', () => {
+      const value = Number(button.dataset.points);
+      if (Number.isNaN(value)) return;
+      pointsInput.value = value;
+      pointsInput.dispatchEvent(new Event('input', { bubbles: true }));
+      pointsInput.focus();
+    });
+  });
 }
 
 function initFirebase() {
@@ -262,6 +277,7 @@ gameList.addEventListener('click', async event => {
 
 initFirebase();
 setTodayAsDefaultDate();
+setupQuickPoints();
 
 clearAll.addEventListener('click', async () => {
   try {

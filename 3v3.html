@@ -47,6 +47,14 @@
         <form id="gameForm">
           <label>Data<div><input type="date" id="date" required /></div></label>
           <label>Punti<div><input type="number" id="points" placeholder="Punti realizzati" required /></div></label>
+          <div class="quick-points" aria-label="Punti rapidi">
+            <button type="button" class="quick-point" data-points="8">+8</button>
+            <button type="button" class="quick-point" data-points="9">+9</button>
+            <button type="button" class="quick-point" data-points="10">+10</button>
+            <button type="button" class="quick-point negative" data-points="-8">-8</button>
+            <button type="button" class="quick-point negative" data-points="-9">-9</button>
+            <button type="button" class="quick-point negative" data-points="-10">-10</button>
+          </div>
           <button type="submit">Salva partita</button>
           <div id="formMessage" class="form-message"></div>
         </form>
