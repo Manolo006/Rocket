@@ -109,6 +109,22 @@ body {
   color: #aab7ff;
 }
 
+#totalGames .games-level {
+  display: block;
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #f8fbff;
+  line-height: 1;
+}
+
+#totalGames .games-real-total {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(220, 228, 255, 0.55);
+}
+
 .grid-two {
   display: grid;
   grid-template-columns: 480px 1fr;
@@ -139,6 +155,15 @@ body {
 
 .panel small {
   color: #96a8ff;
+}
+
+.chart-range {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #e5ebff;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font: inherit;
 }
 
 .form-panel label {

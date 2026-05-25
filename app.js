@@ -16,12 +16,27 @@ const averagePoints = document.getElementById('averagePoints');
 const currentScore = document.getElementById('currentScore');
 const formMessage = document.getElementById('formMessage');
 const clearAll = document.getElementById('clearAll');
-const ctx = document.getElementById('pointsChart').getContext('2d');
+const newSession = document.getElementById('newSession');
+const chartRange = document.getElementById('chartRange');
+const chartCanvas = document.getElementById('pointsChart');
+const ctx = chartCanvas ? chartCanvas.getContext('2d') : null;
 let chart;
 let editingId = null;
 let realtimeDb = null;
 
 const STORAGE_KEY = `games_${mode}`;
+const SESSION_START_KEY = `session_start_${mode}`;
+const CHART_MAX_GAMES = 50;
+
+function getSessionStartIndex() {
+  const raw = localStorage.getItem(SESSION_START_KEY);
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) || parsed < 0 ? 0 : parsed;
+}
+
+function setSessionStartIndex(index) {
+  localStorage.setItem(SESSION_START_KEY, String(Math.max(0, index)));
+}
 
 function showMessage(text, isError = true) {
   if (!formMessage) return;
@@ -46,6 +61,15 @@ function setTodayAsDefaultDate() {
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
   dateInput.value = `${yyyy}-${mm}-${dd}`;
+}
+
+function setCurrentTimeAsDefault() {
+  const timeInput = document.getElementById('time');
+  if (!timeInput) return;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  timeInput.value = `${hh}:${mm}`;
 }
 
 function setupQuickPoints() {
@@ -81,6 +105,7 @@ async function getSavedGames() {
       return {
         id,
         date: data.date || '',
+        time: data.time || '',
         points: Number(data.points) || 0
       };
     });
@@ -97,6 +122,7 @@ async function addGame(game) {
     const ref = realtimeDb.ref(`modes/${mode}/games`).push();
     await ref.set({
         date: game.date,
+        time: game.time || '',
         points: Number(game.points) || 0,
         createdAt: Date.now()
       });
@@ -112,6 +138,7 @@ async function updateGame(id, newData) {
   if (realtimeDb) {
     await realtimeDb.ref(`modes/${mode}/games/${String(id)}`).update({
         date: newData.date,
+        time: newData.time || '',
         points: Number(newData.points) || 0,
         updatedAt: Date.now()
       });
@@ -141,10 +168,12 @@ async function clearAllGames() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-function buildRow(game) {
+function buildRow(game, index) {
   const row = document.createElement('tr');
   row.innerHTML = `
+    <td>${index + 1}</td>
     <td>${game.date}</td>
+    <td>${game.time || '-'}</td>
     <td>${game.points}</td>
     <td>
       <button class="action-button edit" data-id="${String(game.id)}">Modifica</button>
@@ -156,27 +185,45 @@ function buildRow(game) {
 
 function updateStats(games) {
   const total = games.length;
-  const points = games.map(g => Number(g.points) || 0);
+  const sessionStart = Math.min(getSessionStartIndex(), total);
+  const sessionGames = games.slice(sessionStart);
+  const points = sessionGames.map(g => Number(g.points) || 0);
   const balance = points.reduce((sum, value) => sum + value, 0);
   const baseScore = currentScores[mode] ?? 0;
   const realCurrentScore = baseScore + balance;
-  totalGames.textContent = total;
+
+  totalGames.innerHTML = `<span class="games-level">${total}</span><small class="games-real-total">${sessionGames.length}</small>`;
+
   averagePoints.textContent = `${balance >= 0 ? '+' : ''}${balance}`;
   currentScore.textContent = realCurrentScore;
 }
 
 function buildChart(games) {
+  if (!ctx || typeof Chart === 'undefined') return;
+
   const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const deltaValues = sorted.map(g => Number(g.points) || 0);
-  const baseScore = currentScores[mode] ?? 0;
-  const labels = sorted.map((game, index) => `G${index + 1} - ${game.date}`);
+
+  const rangeValue = chartRange ? chartRange.value : String(CHART_MAX_GAMES);
+  const selectedRange = rangeValue === 'all' ? 'all' : Number(rangeValue || CHART_MAX_GAMES);
+
+  const safeMaxGames = selectedRange === 'all'
+    ? sorted.length
+    : Math.max(1, Number.isNaN(selectedRange) ? CHART_MAX_GAMES : selectedRange);
+
+  const visibleGames = safeMaxGames >= sorted.length
+    ? sorted
+    : sorted.slice(-safeMaxGames);
+
+  const visibleStartIndex = sorted.length - visibleGames.length;
+  const deltaValues = visibleGames.map(g => Number(g.points) || 0);
+  const labels = visibleGames.map((game, index) => `G${visibleStartIndex + index + 1} - ${game.date}`);
   const values = deltaValues.reduce((acc, points) => {
-    const last = acc.length ? acc[acc.length - 1] : baseScore;
+    const last = acc.length ? acc[acc.length - 1] : 0;
     acc.push(last + points);
     return acc;
   }, []);
-  const chartLabels = values.length ? labels : ['Totale attuale'];
-  const chartValues = values.length ? values : [baseScore];
+  const chartLabels = values.length ? labels : ['Nessuna partita in sessione'];
+  const chartValues = values.length ? values : [0];
 
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
@@ -217,16 +264,21 @@ function buildChart(games) {
 }
 
 async function refresh() {
-  const games = await getSavedGames();
-  gameList.innerHTML = '';
-  games.forEach(game => gameList.appendChild(buildRow(game)));
-  updateStats(games);
-  buildChart(games);
+  try {
+    const games = await getSavedGames();
+    gameList.innerHTML = '';
+    games.forEach((game, index) => gameList.appendChild(buildRow(game, index)));
+    updateStats(games);
+    buildChart(games);
+  } catch (error) {
+    showMessage(error.message || 'Errore durante aggiornamento dashboard.');
+  }
 }
 
 gameForm.addEventListener('submit', async event => {
   event.preventDefault();
   const dateValue = document.getElementById('date').value;
+  const timeValue = document.getElementById('time').value;
   const pointsValue = Number(document.getElementById('points').value);
   if (!dateValue || Number.isNaN(pointsValue)) {
     showMessage('Inserisci data e punteggio validi.');
@@ -235,15 +287,16 @@ gameForm.addEventListener('submit', async event => {
 
   try {
     if (editingId) {
-      await updateGame(editingId, { date: dateValue, points: pointsValue });
+      await updateGame(editingId, { date: dateValue, time: timeValue, points: pointsValue });
       showMessage('Partita aggiornata con successo.', false);
       editingId = null;
     } else {
-      await addGame({ date: dateValue, points: pointsValue });
+      await addGame({ date: dateValue, time: timeValue, points: pointsValue });
       showMessage('Partita salvata con successo.', false);
     }
     gameForm.reset();
     setTodayAsDefaultDate();
+    setCurrentTimeAsDefault();
     refresh();
   } catch (error) {
     showMessage(error.message || 'Errore durante il salvataggio.');
@@ -261,6 +314,7 @@ gameList.addEventListener('click', async event => {
     const game = games.find(g => String(g.id) === id);
     if (!game) return;
     document.getElementById('date').value = game.date;
+    document.getElementById('time').value = game.time || '';
     document.getElementById('points').value = game.points;
     editingId = realtimeDb ? id : (Number.isNaN(localId) ? id : localId);
   }
@@ -278,19 +332,47 @@ gameList.addEventListener('click', async event => {
 
 initFirebase();
 setTodayAsDefaultDate();
+setCurrentTimeAsDefault();
 setupQuickPoints();
 
 clearAll.addEventListener('click', async () => {
+  const firstConfirm = window.confirm('Sei sicuro di voler eliminare TUTTO l’elenco partite?');
+  if (!firstConfirm) return;
+
+  const secondConfirm = window.confirm('Conferma finale: questa azione è irreversibile. Vuoi davvero cancellare tutto?');
+  if (!secondConfirm) return;
+
   try {
     await clearAllGames();
+    setSessionStartIndex(0);
     editingId = null;
     gameForm.reset();
     setTodayAsDefaultDate();
+    setCurrentTimeAsDefault();
     refresh();
     showMessage('Tutte le partite sono state cancellate.', false);
   } catch (error) {
     showMessage(error.message || 'Errore durante il reset.');
   }
 });
+
+if (newSession) {
+  newSession.addEventListener('click', async () => {
+    try {
+      const games = await getSavedGames();
+      setSessionStartIndex(games.length);
+      refresh();
+      showMessage('Nuova sessione avviata: bilancio azzerato da ora.', false);
+    } catch (error) {
+      showMessage(error.message || 'Errore durante avvio nuova sessione.');
+    }
+  });
+}
+
+if (chartRange) {
+  chartRange.addEventListener('change', () => {
+    refresh();
+  });
+}
 
 refresh();

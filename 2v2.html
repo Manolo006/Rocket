@@ -46,6 +46,7 @@
         <h2>Nuovo inserimento</h2>
         <form id="gameForm">
           <label>Data<div><input type="date" id="date" required /></div></label>
+          <label>Orario<div><input type="time" id="time" /></div></label>
           <label>Punti<div><input type="number" id="points" placeholder="Punti realizzati" required /></div></label>
           <div class="quick-points" aria-label="Punti rapidi">
             <button type="button" class="quick-point" data-points="8">+8</button>
@@ -62,8 +63,14 @@
 
       <article class="panel chart-panel">
         <div class="panel-header">
-          <h2>Trend punteggio totale</h2>
-          <small>Andamento del punteggio totale partita per partita</small>
+          <div>
+            <h2>Trend punteggio totale</h2>
+            <small>Andamento del punteggio totale partita per partita</small>
+          </div>
+          <select id="chartRange" class="chart-range">
+            <option value="50" selected>Ultime 50</option>
+            <option value="all">Tutte</option>
+          </select>
         </div>
         <canvas id="pointsChart"></canvas>
       </article>
@@ -72,13 +79,18 @@
     <section class="panel table-panel">
       <div class="panel-header">
         <h2>Elenco partite</h2>
-        <button id="clearAll" class="ghost">Cancella tutto</button>
+        <div class="table-actions">
+          <button id="newSession" class="ghost">Nuova sessione</button>
+          <button id="clearAll" class="ghost">Cancella tutto</button>
+        </div>
       </div>
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
+              <th>#</th>
               <th>Data</th>
+              <th>Orario</th>
               <th>Punti</th>
               <th>Azioni</th>
             </tr>
