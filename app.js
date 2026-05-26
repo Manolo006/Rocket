@@ -24,6 +24,8 @@ const resetZoom = document.getElementById('resetZoom');
 const googleSignIn = document.getElementById('googleSignIn');
 const googleSignOut = document.getElementById('googleSignOut');
 const userLabel = document.getElementById('userLabel');
+const baseScoreInput = document.getElementById('baseScoreInput');
+const saveBaseScore = document.getElementById('saveBaseScore');
 const pagination = document.getElementById('pagination');
 const chartCanvas = document.getElementById('pointsChart');
 const ctx = chartCanvas ? chartCanvas.getContext('2d') : null;
@@ -32,6 +34,7 @@ let editingId = null;
 let realtimeDb = null;
 let firebaseAuth = null;
 let currentUser = null;
+let baseScoreOverride = null;
 let currentPage = 1;
 
 const GAMES_PER_PAGE = 10;
@@ -192,6 +195,60 @@ function getGamesPath() {
   return `${scope}/modes/${mode}/games`;
 }
 
+function getProfilePath() {
+  const scope = currentUser?.uid ? `users/${currentUser.uid}` : 'guests/local';
+  return `${scope}/profiles/${mode}`;
+}
+
+function getDefaultBaseScore() {
+  return currentScores[mode] ?? 0;
+}
+
+function getEffectiveBaseScore() {
+  return Number.isFinite(baseScoreOverride) ? baseScoreOverride : getDefaultBaseScore();
+}
+
+function updateBaseScoreInput() {
+  if (!baseScoreInput) return;
+  baseScoreInput.value = String(getEffectiveBaseScore());
+}
+
+async function loadBaseScoreOverride() {
+  if (!realtimeDb) {
+    baseScoreOverride = null;
+    updateBaseScoreInput();
+    return;
+  }
+
+  try {
+    const snapshot = await realtimeDb.ref(getProfilePath()).once('value');
+    const profile = snapshot.val() || {};
+    const parsed = Number(profile.baseScore);
+    baseScoreOverride = Number.isFinite(parsed) ? parsed : null;
+  } catch (error) {
+    baseScoreOverride = null;
+  }
+  updateBaseScoreInput();
+}
+
+async function saveBaseScoreOverride(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    showMessage('Inserisci punteggio base valido.');
+    return;
+  }
+
+  if (realtimeDb) {
+    await realtimeDb.ref(getProfilePath()).update({
+      baseScore: numeric,
+      updatedAt: Date.now()
+    });
+  }
+
+  baseScoreOverride = numeric;
+  updateBaseScoreInput();
+}
+
 function updateAuthUI() {
   if (userLabel) {
     userLabel.textContent = currentUser?.displayName || currentUser?.email || 'Guest';
@@ -338,7 +395,7 @@ function updateStats(games) {
   const allPoints = games.map(g => Number(g.points) || 0);
   const points = sessionGames.map(g => Number(g.points) || 0);
   const balance = points.reduce((sum, value) => sum + value, 0);
-  const baseScore = currentScores[mode] ?? 0;
+  const baseScore = getEffectiveBaseScore();
   const overallBalance = allPoints.reduce((sum, value) => sum + value, 0);
   const realCurrentScore = baseScore + overallBalance;
 
@@ -618,9 +675,10 @@ setupQuickPoints();
 setupAutoTimeUpdate();
 
 if (firebaseAuth) {
-  firebaseAuth.onAuthStateChanged(user => {
+  firebaseAuth.onAuthStateChanged(async user => {
     currentUser = user || null;
     updateAuthUI();
+    await loadBaseScoreOverride();
     refresh();
   });
 }
@@ -649,6 +707,19 @@ if (googleSignOut && firebaseAuth) {
 }
 
 updateAuthUI();
+loadBaseScoreOverride();
+
+if (saveBaseScore) {
+  saveBaseScore.addEventListener('click', async () => {
+    try {
+      await saveBaseScoreOverride(baseScoreInput ? baseScoreInput.value : '');
+      refresh();
+      showMessage('Punteggio base personale salvato.', false);
+    } catch (error) {
+      showMessage(error.message || 'Errore salvataggio punteggio base.');
+    }
+  });
+}
 
 clearAll.addEventListener('click', async () => {
   const firstConfirm = window.confirm('Sei sicuro di voler eliminare TUTTO l’elenco partite?');

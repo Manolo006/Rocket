@@ -108,6 +108,29 @@ body {
   background: rgba(255,255,255,0.05);
 }
 
+.base-score-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.base-score-controls label {
+  font-size: 0.88rem;
+  color: #cfd9ff;
+}
+
+.base-score-controls input {
+  width: 130px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #f2f6ff;
+  font: inherit;
+}
+
 .stat-card {
   padding: 20px 24px;
   background: rgba(255,255,255,0.06);
