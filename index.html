@@ -9,7 +9,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body data-mode="1v1">
@@ -24,6 +26,11 @@
           <a href="2v2.html">2v2</a>
           <a href="3v3.html">3v3</a>
         </div>
+        <div class="auth-controls">
+          <span id="userLabel" class="auth-user">Guest</span>
+          <button id="googleSignIn" type="button" class="ghost">Accedi con Google</button>
+          <button id="googleSignOut" type="button" class="ghost" style="display:none;">Esci</button>
+        </div>
       </div>
       <div class="hero-stats">
         <div class="stat-card">
@@ -37,6 +44,18 @@
         <div class="stat-card">
           <span id="averagePoints">0</span>
           <small>Bilancio punti</small>
+        </div>
+        <div class="stat-card">
+          <span id="winRate">0%</span>
+          <small>Win % sessione</small>
+        </div>
+        <div class="stat-card">
+          <span id="bestWinStreak">0</span>
+          <small>Top win streak</small>
+        </div>
+        <div class="stat-card">
+          <span id="bestLoseStreak">0</span>
+          <small>Top lose streak</small>
         </div>
       </div>
     </header>
@@ -67,10 +86,7 @@
             <h2>Trend punteggio totale</h2>
             <small>Andamento del punteggio totale partita per partita</small>
           </div>
-          <select id="chartRange" class="chart-range">
-            <option value="50" selected>Ultime 50</option>
-            <option value="all">Tutte</option>
-          </select>
+          <button id="resetZoom" type="button" class="ghost">Reset zoom</button>
         </div>
         <canvas id="pointsChart"></canvas>
       </article>
@@ -98,6 +114,7 @@
           <tbody id="gameList"></tbody>
         </table>
       </div>
+      <div id="pagination" class="pagination"></div>
     </section>
   </div>
   <script src="firebase-config.js"></script>
