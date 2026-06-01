@@ -145,6 +145,29 @@ body {
   color: #f8fbff;
 }
 
+.stat-card .score-value {
+  display: block;
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.rank-pill {
+  display: inline-flex !important;
+  align-items: center;
+  width: fit-content;
+  margin-top: 10px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--rank-color) 70%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--rank-color) 26%, transparent), rgba(255,255,255,0.05));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--rank-color) 20%, transparent);
+  color: #fff;
+  font-size: 0.78rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.01em;
+}
+
 .stat-card small {
   color: #aab7ff;
 }
@@ -279,6 +302,16 @@ body {
 .chart-panel canvas {
   width: 100% !important;
   height: 380px !important;
+}
+
+.chart-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-panel canvas {
+  position: relative;
+  z-index: 1;
 }
 
 .table-panel {

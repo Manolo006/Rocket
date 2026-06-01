@@ -1,8 +1,8 @@
 const mode = document.body.dataset.mode || '1v1';
 const currentScores = {
-  '1v1': 169,
-  '2v2': 274,
-  '3v3': 442
+  '1v1': 0,
+  '2v2': 0,
+  '3v3': 0
 };
 const FIREBASE_CONFIG = window.FIREBASE_CONFIG || null;
 const hasFirebase = typeof firebase !== 'undefined' && FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey;
@@ -43,6 +43,274 @@ const STORAGE_KEY = `games_${mode}`;
 const SESSION_START_KEY = `session_start_${mode}`;
 const SESSION_ACTIVE_KEY = `session_active_${mode}`;
 const CHART_MAX_GAMES = 50;
+
+const RANK_STYLE = {
+  Bronze: { icon: '🥉', color: '#8b5a2b' },
+  Silver: { icon: '⚪', color: '#c0c7d1' },
+  Gold: { icon: '🟡', color: '#d6a21f' },
+  Platinum: { icon: '💠', color: '#2fc6d6' },
+  Diamond: { icon: '🔷', color: '#3478f6' },
+  Champion: { icon: '🟣', color: '#7a3cff' },
+  'Grand Champion': { icon: '🔴', color: '#d92f45' },
+  'Supersonic Legend': { icon: '👑', color: '#f2e98f' }
+};
+
+const MODE_RANK_STARTS = {
+  // Community MMR thresholds, split by playlist. Easy to update per season.
+  '2v2': [
+    ['Bronze I', 0], ['Bronze II', 176], ['Bronze III', 236],
+    ['Silver I', 296], ['Silver II', 356], ['Silver III', 416],
+    ['Gold I', 476], ['Gold II', 536], ['Gold III', 596],
+    ['Platinum I', 656], ['Platinum II', 716], ['Platinum III', 776],
+    ['Diamond I', 836], ['Diamond II', 916], ['Diamond III', 996],
+    ['Champion I', 1076], ['Champion II', 1196], ['Champion III', 1316],
+    ['Grand Champion I', 1436], ['Grand Champion II', 1556], ['Grand Champion III', 1676],
+    ['Supersonic Legend', 1860]
+  ],
+  '3v3': [
+    ['Bronze I', 0], ['Bronze II', 176], ['Bronze III', 236],
+    ['Silver I', 296], ['Silver II', 356], ['Silver III', 416],
+    ['Gold I', 476], ['Gold II', 536], ['Gold III', 596],
+    ['Platinum I', 656], ['Platinum II', 716], ['Platinum III', 776],
+    ['Diamond I', 836], ['Diamond II', 916], ['Diamond III', 996],
+    ['Champion I', 1076], ['Champion II', 1196], ['Champion III', 1316],
+    ['Grand Champion I', 1436], ['Grand Champion II', 1556], ['Grand Champion III', 1676],
+    ['Supersonic Legend', 1860]
+  ]
+};
+
+const MODE_RANK_RANGES = {
+  '1v1': [
+    ['Bronze I', [[-100, 113], [114, 127], [128, 141], [142, 154]]],
+    ['Bronze II', [[147, 158], [159, 177], [178, 196], [197, 212]]],
+    ['Bronze III', [[214, 218], [219, 237], [238, 256], [257, 264]]],
+    ['Silver I', [[273, 278], [279, 297], [298, 316], [317, 326]]],
+    ['Silver II', [[335, 338], [339, 357], [358, 376], [377, 382]]],
+    ['Silver III', [[395, 398], [399, 417], [418, 436], [437, 452]]],
+    ['Gold I', [[455, 458], [459, 477], [478, 496], [497, 514]]],
+    ['Gold II', [[515, 518], [519, 537], [538, 556], [557, 571]]],
+    ['Gold III', [[575, 578], [579, 597], [598, 616], [617, 633]]],
+    ['Platinum I', [[635, 638], [639, 657], [658, 676], [677, 687]]],
+    ['Platinum II', [[695, 698], [699, 717], [718, 736], [737, 746]]],
+    ['Platinum III', [[755, 758], [759, 777], [778, 796], [797, 806]]],
+    ['Diamond I', [[815, 818], [819, 837], [838, 856], [857, 874]]],
+    ['Diamond II', [[874, 878], [879, 897], [898, 916], [917, 924]]],
+    ['Diamond III', [[935, 938], [939, 957], [958, 976], [976, 983]]],
+    ['Champion I', [[995, 998], [999, 1017], [1018, 1036], [1037, 1045]]],
+    ['Champion II', [[1055, 1058], [1059, 1077], [1078, 1096], [1097, 1104]]],
+    ['Champion III', [[1106, 1118], [1119, 1137], [1138, 1154], [1157, 1168]]],
+    ['Grand Champion I', [[1175, 1178], [1179, 1197], [1198, 1209], [1217, 1230]]],
+    ['Grand Champion II', [[1227, 1238], [1240, 1251], [1259, 1275], [1277, 1294]]],
+    ['Grand Champion III', [[1282, 1298], [1300, 1314], [1318, 1334], [1336, 1354]]],
+    ['Supersonic Legend', [[1345, 1602]]]
+  ],
+  '2v2': [
+    ['Bronze I', [[-100, 118], [119, 137], [138, 156], [157, 161]]],
+    ['Bronze II', [[168, 178], [179, 197], [198, 216], [217, 220]]],
+    ['Bronze III', [[229, 238], [239, 257], [258, 276], [277, 284]]],
+    ['Silver I', [[291, 298], [299, 317], [318, 336], [337, 346]]],
+    ['Silver II', [[351, 358], [359, 377], [378, 396], [397, 405]]],
+    ['Silver III', [[412, 418], [419, 437], [438, 456], [457, 465]]],
+    ['Gold I', [[471, 478], [479, 497], [498, 516], [517, 526]]],
+    ['Gold II', [[532, 538], [539, 557], [558, 576], [577, 585]]],
+    ['Gold III', [[593, 598], [599, 617], [618, 636], [637, 645]]],
+    ['Platinum I', [[652, 658], [659, 677], [678, 696], [697, 705]]],
+    ['Platinum II', [[712, 718], [719, 737], [738, 756], [757, 765]]],
+    ['Platinum III', [[767, 778], [779, 797], [798, 816], [817, 825]]],
+    ['Diamond I', [[835, 843], [844, 867], [868, 891], [892, 901]]],
+    ['Diamond II', [[914, 923], [924, 947], [948, 971], [972, 984]]],
+    ['Diamond III', [[994, 1003], [1004, 1027], [1028, 1051], [1052, 1060]]],
+    ['Champion I', [[1075, 1093], [1094, 1127], [1128, 1160], [1162, 1179]]],
+    ['Champion II', [[1195, 1213], [1214, 1247], [1248, 1277], [1282, 1299]]],
+    ['Champion III', [[1315, 1333], [1335, 1367], [1368, 1396], [1402, 1419]]],
+    ['Grand Champion I', [[1435, 1457], [1462, 1495], [1498, 1526], [1537, 1559]]],
+    ['Grand Champion II', [[1575, 1597], [1600, 1636], [1638, 1660], [1677, 1698]]],
+    ['Grand Champion III', [[1715, 1735], [1744, 1774], [1788, 1815], [1832, 1858]]],
+    ['Supersonic Legend', [[1860, 2107]]]
+  ],
+  '3v3': [
+    ['Bronze I', [[-100, 118], [119, 137], [138, 156], [157, 171]]],
+    ['Bronze II', [[173, 178], [179, 197], [198, 216], [217, 231]]],
+    ['Bronze III', [[229, 238], [239, 257], [258, 276], [277, 286]]],
+    ['Silver I', [[295, 298], [299, 317], [318, 336], [337, 354]]],
+    ['Silver II', [[355, 358], [359, 377], [378, 396], [397, 402]]],
+    ['Silver III', [[415, 418], [419, 437], [438, 456], [457, 470]]],
+    ['Gold I', [[475, 478], [479, 497], [498, 516], [517, 532]]],
+    ['Gold II', [[535, 538], [539, 557], [558, 576], [577, 585]]],
+    ['Gold III', [[595, 598], [599, 617], [618, 636], [637, 642]]],
+    ['Platinum I', [[655, 658], [659, 677], [678, 696], [697, 705]]],
+    ['Platinum II', [[715, 718], [719, 737], [738, 756], [757, 774]]],
+    ['Platinum III', [[775, 778], [779, 797], [798, 816], [817, 825]]],
+    ['Diamond I', [[835, 843], [844, 867], [868, 891], [892, 901]]],
+    ['Diamond II', [[915, 923], [924, 947], [948, 971], [972, 980]]],
+    ['Diamond III', [[995, 1003], [1004, 1027], [1028, 1051], [1052, 1060]]],
+    ['Champion I', [[1075, 1093], [1094, 1127], [1128, 1161], [1162, 1180]]],
+    ['Champion II', [[1195, 1213], [1214, 1247], [1248, 1280], [1282, 1300]]],
+    ['Champion III', [[1315, 1333], [1334, 1367], [1368, 1398], [1402, 1420]]],
+    ['Grand Champion I', [[1435, 1458], [1460, 1486], [1499, 1533], [1537, 1559]]],
+    ['Grand Champion II', [[1575, 1598], [1600, 1634], [1638, 1660], [1677, 1699]]],
+    ['Grand Champion III', [[1704, 1741], [1745, 1777], [1788, 1821], [1832, 1858]]],
+    ['Supersonic Legend', [[1866, 1963]]]
+  ]
+};
+
+function buildRankTable(rankStarts) {
+  return rankStarts.flatMap(([name, start], index) => {
+    const [family] = name.startsWith('Grand Champion')
+      ? ['Grand Champion']
+      : name.startsWith('Supersonic Legend')
+        ? ['Supersonic Legend']
+        : [name.split(' ')[0]];
+    const style = RANK_STYLE[family];
+    const nextStart = rankStarts[index + 1]?.[1] ?? Infinity;
+    const span = nextStart - start;
+
+    if (!Number.isFinite(span) || name === 'Supersonic Legend') {
+      return [{ name, short: 'SSL', min: start, max: Infinity, icon: style.icon, color: style.color }];
+    }
+
+    const divSize = Math.max(1, Math.floor(span / 4));
+    return ['I', 'II', 'III', 'IV'].map((division, divIndex) => {
+      const min = start + (divSize * divIndex);
+      const max = divIndex === 3 ? nextStart - 1 : start + (divSize * (divIndex + 1)) - 1;
+      const shortFamily = family === 'Grand Champion' ? 'GC' : family[0];
+      return {
+        name: `${name} Div ${division}`,
+        short: `${shortFamily}${name.match(/\b(I|II|III)$/)?.[0] || ''}.${divIndex + 1}`,
+        min,
+        max,
+        icon: style.icon,
+        color: style.color
+      };
+    });
+  });
+}
+
+function getRankFamily(name) {
+  if (name.startsWith('Grand Champion')) return 'Grand Champion';
+  if (name.startsWith('Supersonic Legend')) return 'Supersonic Legend';
+  return name.split(' ')[0];
+}
+
+function buildRankTableFromRanges(rankRanges) {
+  return rankRanges.flatMap(([name, divisions]) => {
+    const family = getRankFamily(name);
+    const style = RANK_STYLE[family];
+
+    if (name === 'Supersonic Legend') {
+      const [min, max] = divisions[0];
+      return [{ name, short: 'SSL', min, max, icon: style.icon, color: style.color }];
+    }
+
+    return divisions.map(([min, max], divIndex) => {
+      const shortFamily = family === 'Grand Champion' ? 'GC' : family[0];
+      const tier = name.match(/\b(I|II|III)$/)?.[0] || '';
+      return {
+        name: `${name} Div ${['I', 'II', 'III', 'IV'][divIndex]}`,
+        short: `${shortFamily}${tier}.${divIndex + 1}`,
+        min,
+        max,
+        icon: style.icon,
+        color: style.color
+      };
+    });
+  });
+}
+
+function getRankTable() {
+  if (MODE_RANK_RANGES[mode]) return buildRankTableFromRanges(MODE_RANK_RANGES[mode]);
+  return buildRankTable(MODE_RANK_STARTS[mode] || MODE_RANK_STARTS['2v2']);
+}
+
+const rankBackgroundPlugin = {
+  id: 'rankBackground',
+  beforeDatasetsDraw(activeChart, _args, pluginOptions) {
+    const { ctx: chartCtx, chartArea, scales } = activeChart;
+    const yScale = scales?.y;
+    if (!chartArea || !yScale || !pluginOptions?.ranks?.length) return;
+
+    const min = yScale.min;
+    const max = yScale.max;
+    chartCtx.save();
+    pluginOptions.ranks.forEach(rank => {
+      const from = Math.max(rank.min, min);
+      const to = Math.min(rank.max, max);
+      if (to < min || from > max) return;
+
+      const yTop = yScale.getPixelForValue(to);
+      const yBottom = yScale.getPixelForValue(from);
+      const height = Math.max(1, yBottom - yTop);
+      chartCtx.fillStyle = hexToRgba(rank.color, 0.18);
+      chartCtx.fillRect(chartArea.left, yTop, chartArea.right - chartArea.left, height);
+
+      if (height > 24) {
+        chartCtx.fillStyle = hexToRgba(rank.color, 0.78);
+        chartCtx.font = '800 12px Inter, sans-serif';
+        chartCtx.textAlign = 'right';
+        chartCtx.textBaseline = 'middle';
+        chartCtx.fillText(`${rank.icon} ${rank.name}`, chartArea.right - 8, yTop + height / 2);
+      }
+    });
+    chartCtx.restore();
+  }
+};
+
+if (typeof Chart !== 'undefined') {
+  Chart.register(rankBackgroundPlugin);
+}
+
+function hexToRgba(hex, alpha) {
+  const normalized = hex.replace('#', '');
+  const value = parseInt(normalized.length === 3
+    ? normalized.split('').map(char => char + char).join('')
+    : normalized, 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function getRankForScore(score) {
+  const ranks = getRankTable();
+  return ranks.find(rank => score >= rank.min && score <= rank.max) || ranks[0];
+}
+
+function getVisibleRanks(values) {
+  const ranks = getRankTable();
+  const rankBands = buildRankBands(ranks);
+  if (!values.length) return rankBands.slice(0, 4);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  return rankBands.filter(rank => rank.max >= minValue - 60 && rank.min <= maxValue + 60);
+}
+
+function buildRankBands(ranks) {
+  const bandMap = new Map();
+
+  ranks.forEach(rank => {
+    const baseName = rank.name.replace(/ Div (I|II|III|IV)$/, '');
+    const family = getRankFamily(baseName);
+    const style = RANK_STYLE[family];
+    const current = bandMap.get(baseName);
+
+    if (!current) {
+      bandMap.set(baseName, {
+        name: baseName,
+        short: baseName,
+        min: rank.min,
+        max: rank.max,
+        icon: style.icon,
+        color: style.color
+      });
+      return;
+    }
+
+    current.min = Math.min(current.min, rank.min);
+    current.max = Math.max(current.max, rank.max);
+  });
+
+  return [...bandMap.values()];
+}
 
 function updateAdaptivePointRadius(activeChart) {
   if (!activeChart || !activeChart.data?.datasets?.length) return;
@@ -104,7 +372,15 @@ function showMessage(text, isError = true) {
 
 function getLocalSavedGames() {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [];
+  if (!stored) return [];
+
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEY);
+    return [];
+  }
 }
 
 function persistLocalGames(games) {
@@ -204,6 +480,10 @@ function getDefaultBaseScore() {
   return currentScores[mode] ?? 0;
 }
 
+function compareGamesByDateTime(a, b) {
+  return new Date(`${a.date || ''}T${a.time || '00:00'}`) - new Date(`${b.date || ''}T${b.time || '00:00'}`);
+}
+
 function getEffectiveBaseScore() {
   return Number.isFinite(baseScoreOverride) ? baseScoreOverride : getDefaultBaseScore();
 }
@@ -288,7 +568,7 @@ async function getSavedGames() {
         points: Number(data.points) || 0
       };
     });
-    games.sort((a, b) => new Date(a.date) - new Date(b.date));
+    games.sort(compareGamesByDateTime);
     return games;
   } catch (error) {
     showMessage('Firebase non risponde, uso localStorage.', true);
@@ -433,7 +713,11 @@ function updateStats(games) {
   totalGames.innerHTML = `<span class="games-level">${total}</span><small class="games-real-total">${sessionGames.length}</small>`;
 
   averagePoints.textContent = `${balance >= 0 ? '+' : ''}${balance}`;
-  currentScore.textContent = realCurrentScore;
+  const currentRank = getRankForScore(realCurrentScore);
+  currentScore.innerHTML = `
+    <span class="score-value">${realCurrentScore}</span>
+    <span class="rank-pill" style="--rank-color:${currentRank.color}">${currentRank.icon} ${currentRank.name}</span>
+  `;
   if (winRate) winRate.textContent = `${sessionWinRate.toFixed(1)}%`;
   if (bestWinStreak) bestWinStreak.textContent = String(topWinStreak);
   if (bestLoseStreak) bestLoseStreak.textContent = String(topLoseStreak);
@@ -442,23 +726,18 @@ function updateStats(games) {
 function buildChart(games) {
   if (!ctx || typeof Chart === 'undefined') return;
 
-  const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  const selectedRange = 'all';
-
-  const safeMaxGames = selectedRange === 'all'
-    ? sorted.length
-    : Math.max(1, Number.isNaN(selectedRange) ? CHART_MAX_GAMES : selectedRange);
-
+  const sorted = [...games].sort(compareGamesByDateTime);
+  const safeMaxGames = sorted.length || CHART_MAX_GAMES;
   const visibleGames = safeMaxGames >= sorted.length
     ? sorted
     : sorted.slice(-safeMaxGames);
 
   const visibleStartIndex = sorted.length - visibleGames.length;
+  const baseScore = getEffectiveBaseScore();
   const deltaValues = visibleGames.map(g => Number(g.points) || 0);
   const labels = visibleGames.map((game, index) => `G${visibleStartIndex + index + 1} - ${game.date}`);
   const values = deltaValues.reduce((acc, points) => {
-    const last = acc.length ? acc[acc.length - 1] : 0;
+    const last = acc.length ? acc[acc.length - 1] : baseScore;
     acc.push(last + points);
     return acc;
   }, []);
@@ -474,8 +753,9 @@ function buildChart(games) {
     : deltaValues;
 
   const chartLabels = packedValues.length ? packedLabels : ['Nessuna partita in sessione'];
-  const chartValues = packedValues.length ? packedValues : [0];
+  const chartValues = packedValues.length ? packedValues : [baseScore];
   const tooltipDeltas = packedValues.length ? packedDeltas : [0];
+  const visibleRanks = getVisibleRanks(chartValues);
 
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
@@ -483,7 +763,7 @@ function buildChart(games) {
     data: {
       labels: chartLabels,
       datasets: [{
-        label: 'Punteggio totale',
+        label: 'MMR totale',
         data: chartValues,
         borderColor: '#7da7ff',
         backgroundColor: 'rgba(125, 167, 255, 0.16)',
@@ -516,7 +796,13 @@ function buildChart(games) {
         },
         y: {
           beginAtZero: false,
-          ticks: { color: '#c5d1ff' },
+          ticks: {
+            color: '#c5d1ff',
+            callback(value) {
+              const rank = getRankForScore(Number(value));
+              return `${value} · ${rank.short}`;
+            }
+          },
           grid: { color: 'rgba(255,255,255,0.08)' }
         }
       },
@@ -526,6 +812,7 @@ function buildChart(games) {
           algorithm: 'lttb',
           samples: 120
         },
+        rankBackground: { ranks: visibleRanks },
         zoom: {
           pan: {
             enabled: true,
@@ -572,7 +859,8 @@ function buildChart(games) {
               const totalValue = context.parsed.y;
               const delta = tooltipDeltas[context.dataIndex] ?? 0;
               const signedDelta = `${delta >= 0 ? '+' : ''}${delta}`;
-              return `Totale: ${totalValue} | Delta: ${signedDelta}`;
+              const rank = getRankForScore(totalValue);
+              return `MMR: ${totalValue} | Delta: ${signedDelta} | Rank: ${rank.icon} ${rank.name}`;
             }
           }
         }
