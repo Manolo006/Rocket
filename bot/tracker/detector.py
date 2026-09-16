@@ -41,13 +41,15 @@ class MatchDetector:
         self.current_mode = config.get("default_mode", "2v2")
         self.default_win_points = config.get("win_points", 9)
         self.default_loss_points = config.get("loss_points", -9)
-        self.cooldown_seconds = config.get("detection_cooldown_seconds", 35)
+        self.cooldown_seconds = config.get("detection_cooldown_seconds", 5)
+        self.scan_interval = config.get("ocr_scan_interval_seconds", 0.5)
         self.multi_scan_duration = config.get("ocr_multi_scan_duration_seconds", 8)
         self.ocr_enabled = config.get("ocr_enabled", True) and HAS_RAPIDOCR
         
         # State machine
         self.state = "IDLE"  # IDLE, IN_MATCH, COOLDOWN
         self.last_detection_time = 0
+        self.scoreboard_consumed = False
         
         # Callback for GUI status updates
         self.on_status_change = None
@@ -299,9 +301,9 @@ class MatchDetector:
             print(f"[Detector] Eccezione durante estrazione OCR: {e}")
             return None, None, ""
 
-    def scan_post_match_screen(self, rl_window=None, duration=10):
+    def scan_post_match_screen(self, rl_window=None, duration=8):
         """
-        Effettua una scansione OCR multi-passaggio attendendo la comparsa
+        Effettua una scansione OCR multi-passaggio rapida attendendo la comparsa
         del tabellone di fine partita con il nome del giocatore.
         """
         start_time = time.time()
@@ -319,18 +321,19 @@ class MatchDetector:
                     print(f"[Detector] OCR Tentativo {attempt}: SUCCESSO! Esito={is_win} Punti={points:+d} ({details})")
                     return is_win, points, details
 
-            time.sleep(1.0)
+            time.sleep(0.2)
 
         print("[Detector] Nessun tabellone valido con punteggio per il giocatore rilevato.")
         return None, None, ""
 
     def trigger_match_result(self, is_win, points=None):
         now = time.time()
-        if now - self.last_detection_time < 10:
+        if now - self.last_detection_time < 3:
             print("[Detector] Ignorato trigger match: troppo vicino all'ultimo.")
             return False
 
         self.last_detection_time = now
+        self.scoreboard_consumed = True
         self.state = "COOLDOWN"
 
         if points is None:
@@ -406,20 +409,19 @@ class MatchDetector:
             try:
                 now = time.time()
 
-                # Gestione Cooldown anti-duplicazione
+                # 1. Gestione Cooldown anti-duplicazione non bloccante
                 if self.state == "COOLDOWN":
-                    remaining = int(self.cooldown_seconds - (now - self.last_detection_time))
-                    if remaining > 0:
-                        self.notify_status(f"In attesa del prossimo match (cooldown {remaining}s)...")
-                        time.sleep(2)
-                        continue
-                    else:
+                    elapsed = now - self.last_detection_time
+                    if elapsed >= self.cooldown_seconds:
                         self.state = "IDLE"
+                    else:
+                        remaining = max(1, int(self.cooldown_seconds - elapsed))
+                        self.notify_status(f"Partita registrata ({self.current_mode})! Pronto in {remaining}s...")
 
-                # 1. Verifica se Rocket League e in esecuzione
+                # 2. Verifica se Rocket League e in esecuzione
                 rl_window = self.find_rocket_league_window()
 
-                # 2. Controllo Log Watcher se il file esiste
+                # 3. Controllo continuo del file di Log Rocket League
                 match_ended_from_log = False
                 if self.log_path.exists():
                     if log_fp is None or current_log_path != self.log_path:
@@ -437,41 +439,57 @@ class MatchDetector:
                             line = log_fp.readline()
                             if not line:
                                 break
+                            # Se rileva l'inizio o la ricerca di un nuovo match, resetta subito il tabellone
+                            if any(k in line for k in ["OpeningLoadingScreen", "StartJoin", "StartMatchmaking", "TryToPlayOnlineWithAntiCheat"]):
+                                self.scoreboard_consumed = False
+                                self.state = "IDLE"
+
                             if self._parse_log_line(line):
                                 print(f"[Detector] Fine match rilevata da log: {line.strip()[:80]}")
                                 match_ended_from_log = True
+                                self.scoreboard_consumed = False
                                 break
 
-                # Se intercettata fine match da log, avvia scansione OCR
-                if match_ended_from_log and self.state != "COOLDOWN":
+                # 4. Scansione post-match istantanea da trigger log
+                if match_ended_from_log and not self.scoreboard_consumed and rl_window:
                     is_win, points, details = self.scan_post_match_screen(rl_window, duration=self.multi_scan_duration)
                     if is_win is not None and points is not None:
                         self.trigger_match_result(is_win=is_win, points=points)
+                        continue
                     else:
-                        print(f"[Detector] Fine match da log, ma tabellone/punti per {self.player_name} non confermati. Nessun dato registrato.")
-                    continue
+                        print(f"[Detector] Fine match da log, ma tabellone/punti per {self.player_name} non confermati.")
 
-                # 3. Vision check di sicurezza (SOLO se tabellone con giocatore reale presente)
-                if self.state == "IDLE" and self.ocr_enabled and rl_window:
+                # 5. Vision check istantaneo (cattura subito la schermata se il tabellone e gia a video)
+                if rl_window and self.ocr_enabled:
                     frame = self.capture_game_screen(rl_window)
                     if frame is not None:
                         is_win, points, details = self.extract_match_data_from_ocr(frame)
                         if is_win is not None and points is not None:
-                            print(f"[Detector] Tabellone confermato a video per {self.player_name}: {details}")
-                            self.trigger_match_result(is_win=is_win, points=points)
-                            time.sleep(3)
-                            continue
+                            # Se c'e il tabellone e non e ancora stato consumato per questo match
+                            if not self.scoreboard_consumed and (now - self.last_detection_time >= 3):
+                                print(f"[Detector] Tabellone rilevato istantaneamente a video per {self.player_name}: {details}")
+                                self.trigger_match_result(is_win=is_win, points=points)
+                                continue
+                        else:
+                            # Se il tabellone NON e a schermo e sono passati almeno 3 secondi,
+                            # significa che il giocatore e uscito verso menu/coda/nuovo match:
+                            # ripristina immediatamente lo stato IDLE e scoreboard_consumed = False!
+                            if self.scoreboard_consumed and (now - self.last_detection_time >= 3):
+                                print("[Detector] Uscito dal tabellone: bot pronto istantaneamente per la prossima partita.")
+                                self.scoreboard_consumed = False
+                                self.state = "IDLE"
 
                 if rl_window:
-                    self.notify_status(f"Rocket League attivo ({self.current_mode}) - Monitoraggio OCR automatico...")
+                    if self.state != "COOLDOWN":
+                        self.notify_status(f"Rocket League attivo ({self.current_mode}) - Monitoraggio OCR istantaneo...")
+                    time.sleep(self.scan_interval)
                 else:
                     self.notify_status("In attesa di Rocket League...")
-
-                time.sleep(1.5)
+                    time.sleep(1.5)
 
             except Exception as e:
                 print(f"[Detector] Errore loop detector: {e}")
-                time.sleep(2)
+                time.sleep(1)
 
         if log_fp:
             try:

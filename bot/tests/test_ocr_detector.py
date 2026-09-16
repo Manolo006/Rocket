@@ -117,6 +117,20 @@ def test_ocr_and_detector():
     assert detector._parse_log_line('[0906.02] RankedReconnect: RankedReconnectSave_TA_0.ClearRankedReconnect()') is True
     print('[PASS] Log match-finished triggers verified!')
 
+    # 7. Test Quick Cooldown & Scoreboard Anti-Duplicate Logic
+    assert detector.cooldown_seconds == 5, f'Expected 5s cooldown, got {detector.cooldown_seconds}'
+    assert detector.scan_interval == 0.5, f'Expected 0.5s scan interval, got {detector.scan_interval}'
+    detector.last_detection_time = 0
+    detector.scoreboard_consumed = False
+    triggered = detector.trigger_match_result(is_win=True, points=9)
+    assert triggered is True
+    assert detector.scoreboard_consumed is True
+    assert detector.state == 'COOLDOWN'
+    # Immediate repeat attempt within debounce window must be rejected
+    second_triggered = detector.trigger_match_result(is_win=True, points=9)
+    assert second_triggered is False
+    print('[PASS] Fast 5s cooldown & scoreboard anti-duplicate protection verified!')
+
     print('====================================================')
     print('   >>> ALL OCR & DETECTION TESTS PASSED (100%) <<<   ')
     print('====================================================')
