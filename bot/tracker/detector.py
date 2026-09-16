@@ -143,11 +143,35 @@ class MatchDetector:
 
         return None
 
+    def detect_mode_from_items(self, items):
+        """
+        Rileva la modalita (1v1, 2v2, 3v3) contando le righe giocatori distinte
+        nella colonna centrale del tabellone (cx: 360-540, cy: 150-420).
+        """
+        player_ys = []
+        for it in items:
+            text = it['text'].strip()
+            cx = it['cx']
+            cy = it['cy']
+            if 360 <= cx <= 540 and 150 <= cy <= 420:
+                t_up = text.upper()
+                if not any(k in t_up for k in ['PUNTEGGIO', 'GOL', 'ASSIST', 'PARATE', 'DANNO', 'PING', 'ARANCIONE', 'BLU', 'TEAM', 'TORNEO', 'BUTTON']):
+                    if not any(abs(cy - py) < 18 for py in player_ys):
+                        player_ys.append(cy)
+        count = len(player_ys)
+        if count >= 5:
+            return "3v3"
+        elif count in [3, 4]:
+            return "2v2"
+        elif count in [1, 2]:
+            return "1v1"
+        return None
+
     def extract_match_data_from_ocr(self, frame):
         """
         Esegue OCR sull'immagine di gioco ed estrae:
         1. Esito: Vittoria (True), Sconfitta (False) o None
-        2. Delta Punti MMR esatto: es. +8, +9, +10, +11, -8, -10 (o None)
+        2. Delta Punti MMR esatto: es. +8, +9, +10, +11, -8, -10, -16 (o None)
         3. Stringa testuale completa rilevata
         """
         if self.ocr is None or frame is None:
@@ -172,10 +196,16 @@ class MatchDetector:
             full_text = ' '.join(raw_texts).upper()
 
             # 1. VERIFICA RIGIDA: E' davvero il tabellone post-match?
-            # Se siamo nei menu, nel garage o in partita normale, questi elementi NON esistono!
+            # Supporta sia interfaccia in Inglese che in Italiano
             scoreboard_markers = [
+                # Inglese
                 'SCOREBOARD', 'SCOREBOARO', 'LEAVING IN', 'LEAVINGIN',
-                'PLAY AGAIN', 'SAVE REPLAY', 'SAVEREPLAY'
+                'PLAY AGAIN', 'SAVE REPLAY', 'SAVEREPLAY', 'CHANGE PLAYLIST',
+                # Italiano
+                'CLASSIFICA', 'ABBANDONO TRA', 'ABBANDONOTRA', 'ABBANDONO',
+                'GIOCA DI NUOVO', 'SALVA IL REPLAY', 'CAMBIA PLAYLIST',
+                'VINCITORE', 'PREMI', 'SEGNALA/BLOCCA', 'NASCONDI CLASSIFICA',
+                'SCALDAPANCHINA', 'NON CLASSIFICATO'
             ]
             has_scoreboard = any(m in full_text for m in scoreboard_markers)
             if not has_scoreboard:
@@ -186,16 +216,28 @@ class MatchDetector:
             player_clean = self.player_name.lower().replace('[oh]', '').strip()
             player_item = None
             if player_clean:
+                candidates = []
                 for it in items:
                     if player_clean in it['text'].lower():
-                        player_item = it
-                        break
+                        candidates.append(it)
+
+                if candidates:
+                    # Preferisci il candidato nella tabella centrale (cx > 200, cy < 460)
+                    # evitando il banner avatar nell'HUD in basso a sinistra (cy > 500, cx < 200)
+                    table_candidates = [c for c in candidates if c['cy'] < 460 and c['cx'] > 200]
+                    player_item = table_candidates[0] if table_candidates else candidates[0]
 
             # Se il nome del giocatore e' configurato ma non e' sul tabellone, non rischiare
             if player_clean and not player_item:
                 return None, None, ""
 
             p_cy = player_item['cy'] if player_item else None
+
+            # Rileva automaticamente la modalita dal tabellone (conteggio giocatori) se disponibile
+            detected_mode = self.detect_mode_from_items(items)
+            if detected_mode and detected_mode != self.current_mode:
+                print(f"[Detector] Modalita rilevata da tabellone OCR: {detected_mode}")
+                self.set_mode(detected_mode)
 
             # 3. CERCA I DELTA PUNTI SULLA RIGA DEL GIOCATORE
             delta_pattern = re.compile(r'(?:^|[\s\(\[\{])([+-]\s*\d{1,2})(?:[\s\.,\)\}\]]|$)', re.IGNORECASE)
@@ -310,20 +352,28 @@ class MatchDetector:
         """
         Analizza le righe del Launch.log per aggiornare la modalita e rilevare fine partita.
         """
-        # 1. Rilevamento automatico della modalita di gioco
-        if "RankedReconnect:" in line or "UpdateRankedReconnect()" in line:
-            if "RankedTeamDoubles" in line:
-                if self.current_mode != "2v2":
-                    print("[Detector] Modalita aggiornata da log: 2v2")
-                    self.set_mode("2v2")
-            elif "RankedSoloDuel" in line:
-                if self.current_mode != "1v1":
-                    print("[Detector] Modalita aggiornata da log: 1v1")
-                    self.set_mode("1v1")
-            elif "RankedStandard" in line:
-                if self.current_mode != "3v3":
-                    print("[Detector] Modalita aggiornata da log: 3v3")
-                    self.set_mode("3v3")
+        # 1. Rilevamento automatico della modalita di gioco da log/playlist
+        mode_found = None
+        if any(k in line for k in ["RankedSoloDuel"]):
+            mode_found = "1v1"
+        elif any(k in line for k in ["RankedTeamDoubles", "RankedHoops"]):
+            mode_found = "2v2"
+        elif any(k in line for k in ["RankedStandard", "RankedBreakout", "RankedRumble", "RankedSnowDay"]):
+            mode_found = "3v3"
+        else:
+            m_pl = re.search(r'Playlist(?:Id)?\s*[=:]\s*\(?(\d+)', line)
+            if m_pl:
+                pid = int(m_pl.group(1))
+                if pid in [1, 10]:
+                    mode_found = "1v1"
+                elif pid in [2, 11, 27]:
+                    mode_found = "2v2"
+                elif pid in [3, 4, 13, 28, 29, 30]:
+                    mode_found = "3v3"
+
+        if mode_found and mode_found != self.current_mode:
+            print(f"[Detector] Modalita aggiornata da log: {mode_found}")
+            self.set_mode(mode_found)
 
         # 2. Rilevamento automatico del nickname del player locale
         if "ViewerPRI=PRI_TA_0" in line and "UpdatePlayerName" in line:

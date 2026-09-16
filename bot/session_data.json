@@ -1,29 +1,22 @@
 {
-  "active": true,
-  "session_id": "session_1789558644",
-  "start_time": 1789558644.2428665,
-  "last_match_time": 1789558644.2428658,
-  "matches": [
-    {
-      "mode": "2v2",
-      "points": 9,
-      "timestamp": 1789558644.2428658,
-      "result": "WIN"
-    }
-  ],
+  "active": false,
+  "session_id": null,
+  "start_time": null,
+  "last_match_time": null,
+  "matches": [],
   "summary": {
-    "active": true,
-    "session_id": "session_1789558644",
-    "total_games": 1,
-    "wins": 1,
+    "active": false,
+    "session_id": null,
+    "total_games": 0,
+    "wins": 0,
     "losses": 0,
-    "win_rate": 100.0,
-    "balance": 9,
-    "current_win_streak": 1,
+    "win_rate": 0.0,
+    "balance": 0,
+    "current_win_streak": 0,
     "current_lose_streak": 0,
-    "best_win_streak": 1,
+    "best_win_streak": 0,
     "best_lose_streak": 0,
-    "start_time": 1789558644.2428665,
-    "last_match_time": 1789558644.2428658
+    "start_time": null,
+    "last_match_time": null
   }
 }

@@ -73,14 +73,26 @@ def test_ocr_and_detector():
     assert pts_loss == -8, f'Expected -8, got {pts_loss}'
     print('[PASS] Defeat -8 MMR correctly detected strictly on player row!')
 
-    # Test trigger_match_result applying fallback
+    # 4. Test User Real Match Screen (Italian UI + 3v3 + -16 MMR)
+    real_img_path = Path(os.path.expanduser('~/.gemini/antigravity/brain/c9213456-0648-49f1-ab05-6fc583ceb842/.user_uploaded/media_1789559261117.png'))
+    if real_img_path.exists():
+        real_frame = cv2.imread(str(real_img_path))
+        r_win, r_pts, r_details = detector.extract_match_data_from_ocr(real_frame)
+        print(f'Test User Real Screenshot -> win: {r_win}, points: {r_pts}, mode: {detector.current_mode}, details: {r_details}')
+        assert r_win is False, f'Expected False (loss), got {r_win}'
+        assert r_pts == -16, f'Expected -16 points delta, got {r_pts}'
+        assert detector.current_mode == '3v3', f'Expected 3v3 mode, got {detector.current_mode}'
+        print('[PASS] User real Italian match screenshot extracted perfectly (Defeat -16 MMR, Mode 3v3)!')
+
+    # 5. Test trigger_match_result applying fallback
+    detector.set_mode('2v2')
     detector.last_detection_time = 0 # reset debounce
     detector.trigger_match_result(is_win=True, points=None)
     assert len(detected_events) == 1
     assert detected_events[0] == ('2v2', 9, 'VITTORIA')
     print('[PASS] Fallback to default win_points (+9) applied seamlessly!')
 
-    # 4. Test Log Line Parsing
+    # 6. Test Log Line Parsing
     # Playlist detection
     assert detector._parse_log_line('RankedReconnect: UpdateRankedReconnect() RankedTeamDoubles True') is False
     assert detector.current_mode == '2v2'
@@ -91,6 +103,14 @@ def test_ocr_and_detector():
     detector._parse_log_line('RankedReconnect: UpdateRankedReconnect() RankedStandard True')
     assert detector.current_mode == '3v3'
     print('[PASS] Dynamic mode switching (3v3) from log verified!')
+
+    detector._parse_log_line('RankedReconnect: LocalPlayer_TA_0.UpdateRankedReconnect() RankedBreakout True 6 False')
+    assert detector.current_mode == '3v3'
+    print('[PASS] Dynamic mode switching (Dropshot/Breakout 3v3) from log verified!')
+
+    detector._parse_log_line('Online: TryToPlayOnlineWithAntiCheat ControllerID=(-1) PlaylistId=(11)')
+    assert detector.current_mode == '2v2'
+    print('[PASS] PlaylistId=11 mode switching (2v2) from log verified!')
 
     # Match end detection
     assert detector._parse_log_line('[0906.02] Party: Ranked Game Finished, Clear party member server') is True

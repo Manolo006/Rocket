@@ -17,7 +17,7 @@ def test_integration():
         'firebase_database_url': 'https://rocketleaguestatss-default-rtdb.europe-west1.firebasedatabase.app',
         'scope': 'guests/local',
         'default_mode': '2v2',
-        'local_server_port': 59123
+        'local_server_port': 59128
     }
     
     # 2. Setup Services
@@ -29,7 +29,7 @@ def test_integration():
     time.sleep(0.5)
     
     # 3. Test Status Endpoint
-    res = requests.get('http://127.0.0.1:59123/api/status', timeout=3)
+    res = requests.get('http://127.0.0.1:59128/api/status', timeout=3)
     assert res.status_code == 200, f'Status code {res.status_code}'
     status = res.json()
     print('1. Server Status OK:', status['status'])
@@ -50,7 +50,7 @@ def test_integration():
     
     # 6. Test trigger endpoint
     print('4. Testing HTTP POST /api/game trigger...')
-    post_res = requests.post('http://127.0.0.1:59123/api/game', json={'mode': '2v2', 'points': -9}, timeout=3)
+    post_res = requests.post('http://127.0.0.1:59128/api/game', json={'mode': '2v2', 'points': -9}, timeout=3)
     assert post_res.status_code == 200
     print('   POST /api/game OK!')
     

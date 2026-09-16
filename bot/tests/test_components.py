@@ -32,13 +32,13 @@ def test_all():
         'firebase_database_url': 'https://rocketleaguestatss-default-rtdb.europe-west1.firebasedatabase.app',
         'scope': 'guests/local',
         'default_mode': '2v2',
-        'local_server_port': 59123
+        'local_server_port': 59128
     }
     sync = SyncService(config, session_manager=sm)
     sync.start_local_server()
     time.sleep(0.5)
 
-    res = requests.get('http://127.0.0.1:59123/api/status', timeout=2)
+    res = requests.get('http://127.0.0.1:59128/api/status', timeout=2)
     assert res.status_code == 200
     data = res.json()
     print('API status response:', data)
