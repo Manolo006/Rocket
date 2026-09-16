@@ -3,7 +3,7 @@ import time
 import requests
 from pathlib import Path
 
-bot_dir = Path(__file__).resolve().parent
+bot_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(bot_dir))
 
 from tracker.session_manager import SessionManager

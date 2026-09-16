@@ -1,22 +1,20 @@
 {
-  "active": true,
-  "session_id": "session_1789526350",
-  "start_time": 1789526350.8731325,
-  "last_match_time": 1789526350.8731325,
+  "active": false,
+  "session_id": null,
+  "start_time": null,
+  "last_match_time": null,
   "matches": [],
   "summary": {
-    "active": true,
-    "session_id": "session_1789526350",
+    "active": false,
+    "session_id": null,
     "total_games": 0,
     "wins": 0,
     "losses": 0,
-    "win_rate": 0.0,
+    "win_rate": 0,
     "balance": 0,
     "current_win_streak": 0,
     "current_lose_streak": 0,
     "best_win_streak": 0,
-    "best_lose_streak": 0,
-    "start_time": 1789526350.8731325,
-    "last_match_time": 1789526350.8731325
+    "best_lose_streak": 0
   }
 }

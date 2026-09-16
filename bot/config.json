@@ -1,12 +1,16 @@
-﻿{
-  firebase_database_url: https://rocketleaguestatss-default-rtdb.europe-west1.firebasedatabase.app,
-  scope: guests/local,
-  default_mode: 2v2,
-  win_points: 9,
-  loss_points: -9,
-  auto_session_timeout_minutes: 45,
-  local_server_port: 59123,
-  detection_cooldown_seconds: 35,
-  sound_notifications: true,
-  log_file_path: ~/Documents/My Games/Rocket League/TAGame/Logs/Launch.log
+{
+  "firebase_database_url": "https://rocketleaguestatss-default-rtdb.europe-west1.firebasedatabase.app",
+  "scope": "guests/local",
+  "default_mode": "2v2",
+  "win_points": 9,
+  "loss_points": -9,
+  "auto_session_timeout_minutes": 45,
+  "local_server_port": 59123,
+  "detection_cooldown_seconds": 35,
+  "ocr_enabled": true,
+  "ocr_scan_interval_seconds": 2.0,
+  "sound_notifications": true,
+  "player_name": "manolo20006",
+  "ocr_multi_scan_duration_seconds": 8,
+  "log_file_path": "~/Documents/My Games/Rocket League/TAGame/Logs/Launch.log"
 }
