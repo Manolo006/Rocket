@@ -1,0 +1,29 @@
+{
+  "active": true,
+  "session_id": "session_1789526134",
+  "start_time": 1789526134.1402414,
+  "last_match_time": 1789526134.1402407,
+  "matches": [
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789526134.1402407,
+      "result": "WIN"
+    }
+  ],
+  "summary": {
+    "active": true,
+    "session_id": "session_1789526134",
+    "total_games": 1,
+    "wins": 1,
+    "losses": 0,
+    "win_rate": 100.0,
+    "balance": 9,
+    "current_win_streak": 1,
+    "current_lose_streak": 0,
+    "best_win_streak": 1,
+    "best_lose_streak": 0,
+    "start_time": 1789526134.1402414,
+    "last_match_time": 1789526134.1402407
+  }
+}

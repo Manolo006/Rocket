@@ -956,7 +956,81 @@ gameList.addEventListener('click', async event => {
   }
 });
 
+let realtimeGamesListener = null;
+
+function setupRealtimeListener() {
+  if (!realtimeDb) return;
+  try {
+    const gamesRef = realtimeDb.ref(getGamesPath());
+    if (realtimeGamesListener) {
+      gamesRef.off('value', realtimeGamesListener);
+    }
+    realtimeGamesListener = () => {
+      refresh();
+    };
+    gamesRef.on('value', realtimeGamesListener);
+  } catch (error) {
+    console.warn('[Sync] Impossibile registrare listener realtime Firebase:', error);
+  }
+}
+
+function setupBotCompanionSync() {
+  const badge = document.getElementById('botStatusBadge');
+  if (typeof EventSource === 'undefined') return;
+
+  try {
+    const sse = new EventSource('http://127.0.0.1:59123/api/events');
+
+    sse.onopen = () => {
+      if (badge) {
+        badge.textContent = '🤖 Bot Connesso';
+        badge.classList.add('connected');
+      }
+    };
+
+    sse.onmessage = event => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'game_added') {
+          refresh();
+          showMessage(`Partita registrata dal bot: ${msg.payload.points >= 0 ? '+' : ''}${msg.payload.points}`, false);
+        } else if (msg.type === 'session_started') {
+          getSavedGames().then(games => {
+            setSessionStartIndex(games.length);
+            setSessionActive(true);
+            updateSessionButtonLabel();
+            refresh();
+            showMessage('Nuova sessione avviata dal bot.', false);
+          });
+        } else if (msg.type === 'session_ended') {
+          setSessionStartIndex(0);
+          setSessionActive(false);
+          updateSessionButtonLabel();
+          refresh();
+          showMessage('Sessione terminata dal bot.', false);
+        }
+      } catch (err) {
+        console.error('[Bot SSE] Errore parsing messaggio:', err);
+      }
+    };
+
+    sse.onerror = () => {
+      if (badge) {
+        badge.textContent = '🤖 Bot Offline';
+        badge.classList.remove('connected');
+      }
+    };
+  } catch (e) {
+    if (badge) {
+      badge.textContent = '🤖 Bot Offline';
+      badge.classList.remove('connected');
+    }
+  }
+}
+
 initFirebase();
+setupRealtimeListener();
+setupBotCompanionSync();
 setTodayAsDefaultDate();
 setCurrentTimeAsDefault();
 setupQuickPoints();
@@ -966,6 +1040,7 @@ if (firebaseAuth) {
   firebaseAuth.onAuthStateChanged(async user => {
     currentUser = user || null;
     updateAuthUI();
+    setupRealtimeListener();
     await loadBaseScoreOverride();
     refresh();
   });
