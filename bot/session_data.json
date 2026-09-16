@@ -1,20 +1,107 @@
 {
-  "active": false,
-  "session_id": null,
-  "start_time": null,
-  "last_match_time": null,
-  "matches": [],
+  "active": true,
+  "session_id": "session_1789557546",
+  "start_time": 1789557546.8234937,
+  "last_match_time": 1789557996.248558,
+  "matches": [
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557546.8234928,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": -2,
+      "timestamp": 1789557587.724489,
+      "result": "LOSS"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557624.0713956,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557660.8331974,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 1,
+      "timestamp": 1789557698.3236918,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557736.2112606,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557754.3447108,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557774.5095012,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": -9,
+      "timestamp": 1789557785.9658582,
+      "result": "LOSS"
+    },
+    {
+      "mode": "2v2",
+      "points": 0,
+      "timestamp": 1789557824.2738676,
+      "result": "LOSS"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557862.9548302,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557908.202507,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 9,
+      "timestamp": 1789557958.0289135,
+      "result": "WIN"
+    },
+    {
+      "mode": "2v2",
+      "points": 30,
+      "timestamp": 1789557996.248558,
+      "result": "WIN"
+    }
+  ],
   "summary": {
-    "active": false,
-    "session_id": null,
-    "total_games": 0,
-    "wins": 0,
-    "losses": 0,
-    "win_rate": 0,
-    "balance": 0,
-    "current_win_streak": 0,
+    "active": true,
+    "session_id": "session_1789557546",
+    "total_games": 14,
+    "wins": 11,
+    "losses": 2,
+    "win_rate": 78.6,
+    "balance": 101,
+    "current_win_streak": 4,
     "current_lose_streak": 0,
-    "best_win_streak": 0,
-    "best_lose_streak": 0
+    "best_win_streak": 6,
+    "best_lose_streak": 1,
+    "start_time": 1789557546.8234937,
+    "last_match_time": 1789557996.248558
   }
 }

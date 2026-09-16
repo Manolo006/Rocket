@@ -187,28 +187,51 @@ class MatchDetector:
                         is_win = False
                         break
 
-            # 2. Cerca delta punti MMR (es. +9, -8, (+10), (-7), +9 MMR, -10.5, Delta: +8)
+            # 2. Riconoscimento schermata post-match / tabellone
+            is_post_match = any(w in full_text for w in [
+                'SCOREBOARD', 'SCOREBOARO', 'LEAVING IN', 'LEAVINGIN',
+                'PLAY AGAIN', 'SAVE REPLAY', 'SAVEREPLAY', 'DIVISION UP',
+                'DIVISION DOWN', 'VITTORIA', 'SCONFITTA', 'WINNER', 'DEFEAT'
+            ])
+
+            # 3. Cerca delta punti MMR (es. +9, -8, (+10), (-7), +9 MMR, +9 661, +9669)
             candidates = []
             delta_pattern = re.compile(r'(?:^|[\s\(\[\{])([+-]\s*\d+(?:[\.,]\d+)?)(?:[\)\]\}\s]|MMR|PTS|PUNTI|$)', re.IGNORECASE)
             paren_pattern = re.compile(r'\(\s*([+-]?\d+(?:[\.,]\d+)?)\s*\)')
+            # Supporto per delta incollato a MMR totale (es. +9669 -> delta: +9, totale: 669)
+            joined_pattern = re.compile(r'^([+-]\s*\d{1,2})(\d{3,4})')
 
             for it in items:
-                t = it['text']
+                t = it['text'].strip()
+
+                # A. Pattern delta incollato a MMR totale (BakkesMod)
+                m_j = joined_pattern.match(t)
+                if m_j:
+                    val = float(m_j.group(1).replace(' ', ''))
+                    if abs(val) <= 50:
+                        candidates.append({'val': val, 'item': it, 'has_sign': True})
+                        continue
+
+                # B. Pattern delta standard con segno esplicito
                 m = delta_pattern.search(t)
                 if m:
                     clean = m.group(1).replace(' ', '').replace(',', '.')
                     try:
                         val = float(clean)
-                        candidates.append({'val': val, 'item': it, 'has_sign': True})
+                        # Un delta reale di Rocket League e' tipicamente tra -50 e +50
+                        if abs(val) <= 50:
+                            candidates.append({'val': val, 'item': it, 'has_sign': True})
                     except ValueError:
                         pass
 
+                # C. Pattern numero tra parentesi
                 m_paren = paren_pattern.search(t)
                 if m_paren:
                     clean = m_paren.group(1).replace(' ', '').replace(',', '.')
                     try:
                         val = float(clean)
-                        candidates.append({'val': val, 'item': it, 'has_sign': ('+' in clean or '-' in clean)})
+                        if abs(val) <= 50:
+                            candidates.append({'val': val, 'item': it, 'has_sign': ('+' in clean or '-' in clean)})
                     except ValueError:
                         pass
 
