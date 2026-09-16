@@ -1,6 +1,6 @@
 {
   "firebase_database_url": "https://rocketleaguestatss-default-rtdb.europe-west1.firebasedatabase.app",
-  "scope": "guests/local",
+  "scope": "users/s74GzyVyYgZt9oacrPfd0LlvFXv1",
   "default_mode": "2v2",
   "win_points": 9,
   "loss_points": -9,

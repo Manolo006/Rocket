@@ -171,155 +171,116 @@ class MatchDetector:
 
             full_text = ' '.join(raw_texts).upper()
 
-            # 1. Determina l'esito (Vittoria o Sconfitta)
-            is_win = None
-            win_keywords = ['VITTORIA', 'WINNER', 'VICTORY', 'HAI VINTO', 'WIN', 'PROMOSSO', 'DIVISION UP', 'SALITO']
-            loss_keywords = ['SCONFITTA', 'DEFEAT', 'HAI PERSO', 'LOSS', 'RETROCESSO', 'DIVISION DOWN', 'SCESO']
+            # 1. VERIFICA RIGIDA: E' davvero il tabellone post-match?
+            # Se siamo nei menu, nel garage o in partita normale, questi elementi NON esistono!
+            scoreboard_markers = [
+                'SCOREBOARD', 'SCOREBOARO', 'LEAVING IN', 'LEAVINGIN',
+                'PLAY AGAIN', 'SAVE REPLAY', 'SAVEREPLAY'
+            ]
+            has_scoreboard = any(m in full_text for m in scoreboard_markers)
+            if not has_scoreboard:
+                # Non siamo sul tabellone di fine partita: nessun trigger!
+                return None, None, ""
 
-            for kw in win_keywords:
-                if kw in full_text:
-                    is_win = True
-                    break
-
-            if is_win is None:
-                for kw in loss_keywords:
-                    if kw in full_text:
-                        is_win = False
+            # 2. CERCA IL GIOCATORE TARGET (es. manolo20006 o [OH] manolo20006)
+            player_clean = self.player_name.lower().replace('[oh]', '').strip()
+            player_item = None
+            if player_clean:
+                for it in items:
+                    if player_clean in it['text'].lower():
+                        player_item = it
                         break
 
-            # 2. Riconoscimento schermata post-match / tabellone
-            is_post_match = any(w in full_text for w in [
-                'SCOREBOARD', 'SCOREBOARO', 'LEAVING IN', 'LEAVINGIN',
-                'PLAY AGAIN', 'SAVE REPLAY', 'SAVEREPLAY', 'DIVISION UP',
-                'DIVISION DOWN', 'VITTORIA', 'SCONFITTA', 'WINNER', 'DEFEAT'
-            ])
+            # Se il nome del giocatore e' configurato ma non e' sul tabellone, non rischiare
+            if player_clean and not player_item:
+                return None, None, ""
 
-            # 3. Cerca delta punti MMR (es. +9, -8, (+10), (-7), +9 MMR, +9 661, +9669)
-            candidates = []
-            delta_pattern = re.compile(r'(?:^|[\s\(\[\{])([+-]\s*\d+(?:[\.,]\d+)?)(?:[\)\]\}\s]|MMR|PTS|PUNTI|$)', re.IGNORECASE)
-            paren_pattern = re.compile(r'\(\s*([+-]?\d+(?:[\.,]\d+)?)\s*\)')
-            # Supporto per delta incollato a MMR totale (es. +9669 -> delta: +9, totale: 669)
+            p_cy = player_item['cy'] if player_item else None
+
+            # 3. CERCA I DELTA PUNTI SULLA RIGA DEL GIOCATORE
+            delta_pattern = re.compile(r'(?:^|[\s\(\[\{])([+-]\s*\d{1,2})(?:[\s\.,\)\}\]]|$)', re.IGNORECASE)
             joined_pattern = re.compile(r'^([+-]\s*\d{1,2})(\d{3,4})')
+
+            row_deltas = []
+            all_deltas = []
 
             for it in items:
                 t = it['text'].strip()
+                cy = it['cy']
 
-                # A. Pattern delta incollato a MMR totale (BakkesMod)
-                m_j = joined_pattern.match(t)
-                if m_j:
-                    val = float(m_j.group(1).replace(' ', ''))
-                    if abs(val) <= 50:
-                        candidates.append({'val': val, 'item': it, 'has_sign': True})
-                        continue
+                val = None
+                mj = joined_pattern.match(t)
+                if mj:
+                    v = int(mj.group(1).replace(' ', ''))
+                    if abs(v) <= 50:
+                        val = v
+                else:
+                    m = delta_pattern.search(t)
+                    if m:
+                        v = int(m.group(1).replace(' ', ''))
+                        if abs(v) <= 50:
+                            val = v
 
-                # B. Pattern delta standard con segno esplicito
-                m = delta_pattern.search(t)
-                if m:
-                    clean = m.group(1).replace(' ', '').replace(',', '.')
-                    try:
-                        val = float(clean)
-                        # Un delta reale di Rocket League e' tipicamente tra -50 e +50
-                        if abs(val) <= 50:
-                            candidates.append({'val': val, 'item': it, 'has_sign': True})
-                    except ValueError:
-                        pass
-
-                # C. Pattern numero tra parentesi
-                m_paren = paren_pattern.search(t)
-                if m_paren:
-                    clean = m_paren.group(1).replace(' ', '').replace(',', '.')
-                    try:
-                        val = float(clean)
-                        if abs(val) <= 50:
-                            candidates.append({'val': val, 'item': it, 'has_sign': ('+' in clean or '-' in clean)})
-                    except ValueError:
-                        pass
+                if val is not None:
+                    all_deltas.append({'val': val, 'cy': cy})
+                    # Se vicino alla riga del player (entro 25 pixel verticali)
+                    if p_cy is not None and abs(cy - p_cy) <= 25:
+                        row_deltas.append(val)
 
             chosen_points = None
+            if row_deltas:
+                # Abbiamo trovato il delta esattamente sulla riga di manolo20006!
+                chosen_points = row_deltas[0]
+            elif p_cy is None and all_deltas:
+                chosen_points = all_deltas[0]['val']
 
-            # Se abbiamo il nome del player, cerchiamo il candidato piu vicino sulla stessa riga (tabellone)
-            if self.player_name and candidates:
-                p_lower = self.player_name.lower()
-                player_item = None
-                for it in items:
-                    if p_lower in it['text'].lower():
-                        player_item = it
-                        break
-                if player_item:
-                    candidates.sort(key=lambda c: abs(c['item']['cy'] - player_item['cy']))
-                    chosen_points = int(round(candidates[0]['val']))
+            # Se abbiamo trovato i punti specifici della riga
+            if chosen_points is not None:
+                is_win = (chosen_points > 0)
+                return is_win, chosen_points, f"Rilevato su riga {self.player_name}: {chosen_points:+d}"
 
-            # Se non trovato tramite nome, filtriamo in base all'esito
-            if chosen_points is None and candidates:
-                if is_win is True:
-                    positives = [c for c in candidates if c['val'] > 0]
-                    if positives:
-                        chosen_points = int(round(positives[0]['val']))
-                elif is_win is False:
-                    negatives = [c for c in candidates if c['val'] < 0]
-                    if negatives:
-                        chosen_points = int(round(negatives[0]['val']))
+            # Se siamo sul tabellone ma BakkesMod non ha la colonna MMR:
+            # Fallback intelligente tramite banner
+            is_win = None
+            if any(w in full_text for w in ['VITTORIA', 'WINNER', 'VICTORY', 'HAI VINTO', 'DIVISION UP']):
+                is_win = True
+            elif any(w in full_text for w in ['SCONFITTA', 'DEFEAT', 'HAI PERSO', 'DIVISION DOWN']):
+                is_win = False
 
-                if chosen_points is None:
-                    signed = [c for c in candidates if c['has_sign']]
-                    if signed:
-                        chosen_points = int(round(signed[0]['val']))
-                    else:
-                        chosen_points = int(round(candidates[0]['val']))
+            if is_win is not None:
+                points = self.default_win_points if is_win else self.default_loss_points
+                return is_win, points, "Esito da banner tabellone"
 
-            if is_win is None and chosen_points is not None:
-                is_win = (chosen_points >= 0)
-
-            # Normalizzazione coerenza tra segno ed esito
-            if chosen_points is not None and is_win is not None:
-                if is_win and chosen_points < 0:
-                    chosen_points = abs(chosen_points)
-                elif not is_win and chosen_points > 0:
-                    chosen_points = -abs(chosen_points)
-
-            return is_win, chosen_points, full_text
+            return None, None, ""
 
         except Exception as e:
             print(f"[Detector] Eccezione durante estrazione OCR: {e}")
             return None, None, ""
 
-    def scan_post_match_screen(self, rl_window=None, duration=8):
+    def scan_post_match_screen(self, rl_window=None, duration=10):
         """
-        Effettua una scansione OCR multi-passaggio per alcuni secondi
-        in modo da intercettare sia il banner iniziale (Vittoria/Sconfitta)
-        sia il tabellone successivo con i delta MMR (+10, -8, ecc.).
+        Effettua una scansione OCR multi-passaggio attendendo la comparsa
+        del tabellone di fine partita con il nome del giocatore.
         """
         start_time = time.time()
-        best_win = None
-        best_points = None
-        best_details = ""
         attempt = 0
 
-        self.notify_status("Fine match! Lettura automatica con OCR in corso...")
-        print("[Detector] Inizio scansione OCR multi-passaggio post-match...")
+        self.notify_status(f"Match concluso! Lettura tabellone per {self.player_name}...")
+        print(f"[Detector] Inizio scansione OCR per {self.player_name}...")
 
         while (time.time() - start_time) < duration and self.running:
             attempt += 1
             frame = self.capture_game_screen(rl_window)
             if frame is not None:
                 is_win, points, details = self.extract_match_data_from_ocr(frame)
-                if is_win is not None and best_win is None:
-                    best_win = is_win
-                if points is not None:
-                    best_points = points
-                    best_details = details
-                    print(f"[Detector] OCR Tentativo {attempt}: Rilevato esito={is_win} punti={points:+d}")
-                    break
-                elif is_win is not None:
-                    print(f"[Detector] OCR Tentativo {attempt}: Rilevato esito={is_win}, in attesa dei numeri MMR...")
+                if is_win is not None and points is not None:
+                    print(f"[Detector] OCR Tentativo {attempt}: SUCCESSO! Esito={is_win} Punti={points:+d} ({details})")
+                    return is_win, points, details
 
-            time.sleep(1.2)
+            time.sleep(1.0)
 
-        if best_win is not None and best_points is None:
-            best_points = self.default_win_points if best_win else self.default_loss_points
-            print(f"[Detector] Nessun delta MMR a video: uso punti di default ({best_points:+d})")
-
-        return best_win, best_points, best_details
+        print("[Detector] Nessun tabellone valido con punteggio per il giocatore rilevato.")
+        return None, None, ""
 
     def trigger_match_result(self, is_win, points=None):
         now = time.time()
@@ -431,23 +392,22 @@ class MatchDetector:
                                 match_ended_from_log = True
                                 break
 
-                # Se intercettata fine match da log, avvia scansione OCR multi-passaggio
+                # Se intercettata fine match da log, avvia scansione OCR
                 if match_ended_from_log and self.state != "COOLDOWN":
-                    is_win, points, _ = self.scan_post_match_screen(rl_window, duration=self.multi_scan_duration)
-                    if is_win is not None:
+                    is_win, points, details = self.scan_post_match_screen(rl_window, duration=self.multi_scan_duration)
+                    if is_win is not None and points is not None:
                         self.trigger_match_result(is_win=is_win, points=points)
-                        continue
                     else:
-                        self.trigger_match_result(is_win=True)
-                        continue
+                        print(f"[Detector] Fine match da log, ma tabellone/punti per {self.player_name} non confermati. Nessun dato registrato.")
+                    continue
 
-                # 3. Vision check periodico con OCR se finestra attiva (backup)
+                # 3. Vision check di sicurezza (SOLO se tabellone con giocatore reale presente)
                 if self.state == "IDLE" and self.ocr_enabled and rl_window:
                     frame = self.capture_game_screen(rl_window)
                     if frame is not None:
-                        is_win, points, _ = self.extract_match_data_from_ocr(frame)
-                        if is_win is not None:
-                            print(f"[Detector] OCR Vision attiva: rilevato esito={is_win} punti={points}")
+                        is_win, points, details = self.extract_match_data_from_ocr(frame)
+                        if is_win is not None and points is not None:
+                            print(f"[Detector] Tabellone confermato a video per {self.player_name}: {details}")
                             self.trigger_match_result(is_win=is_win, points=points)
                             time.sleep(3)
                             continue

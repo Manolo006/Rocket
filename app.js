@@ -974,6 +974,15 @@ function setupRealtimeListener() {
   }
 }
 
+function notifyBotCompanionUser() {
+  const scope = currentUser?.uid ? `users/${currentUser.uid}` : 'guests/local';
+  fetch('http://127.0.0.1:59123/api/user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scope })
+  }).catch(() => {});
+}
+
 function setupBotCompanionSync() {
   const badge = document.getElementById('botStatusBadge');
   if (typeof EventSource === 'undefined') return;
@@ -986,6 +995,7 @@ function setupBotCompanionSync() {
         badge.textContent = '🤖 Bot Connesso';
         badge.classList.add('connected');
       }
+      notifyBotCompanionUser();
     };
 
     sse.onmessage = event => {
@@ -1041,6 +1051,7 @@ if (firebaseAuth) {
     currentUser = user || null;
     updateAuthUI();
     setupRealtimeListener();
+    notifyBotCompanionUser();
     await loadBaseScoreOverride();
     refresh();
   });

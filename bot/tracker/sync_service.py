@@ -124,6 +124,17 @@ class SyncService:
                     self.send_cors_headers()
                     self.end_headers()
                     self.wfile.write(json.dumps({"ok": True, "action": action}).encode("utf-8"))
+
+                elif parsed.path == "/api/user":
+                    new_scope = data.get("scope")
+                    if new_scope:
+                        sync_self.scope = new_scope.strip("/")
+                        print(f"[SyncService] Scope sincronizzato dal browser: {sync_self.scope}")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"ok": True, "scope": sync_self.scope}).encode("utf-8"))
                 else:
                     self.send_response(404)
                     self.send_cors_headers()
