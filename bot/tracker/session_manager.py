@@ -140,6 +140,25 @@ class SessionManager:
     def get_summary(self):
         total = len(self.matches)
         win_rate = (self.wins / total * 100.0) if total > 0 else 0.0
+        last_m = self.matches[-1] if self.matches else None
+
+        by_mode = {
+            "1v1": {"games": 0, "wins": 0, "losses": 0, "balance": 0},
+            "2v2": {"games": 0, "wins": 0, "losses": 0, "balance": 0},
+            "3v3": {"games": 0, "wins": 0, "losses": 0, "balance": 0}
+        }
+        for m in self.matches:
+            m_mode = m.get("mode", "2v2")
+            if m_mode not in by_mode:
+                by_mode[m_mode] = {"games": 0, "wins": 0, "losses": 0, "balance": 0}
+            by_mode[m_mode]["games"] += 1
+            pts = m.get("points", 0)
+            by_mode[m_mode]["balance"] += pts
+            if pts > 0:
+                by_mode[m_mode]["wins"] += 1
+            elif pts < 0:
+                by_mode[m_mode]["losses"] += 1
+
         return {
             "active": self.active,
             "session_id": self.session_id,
@@ -152,6 +171,8 @@ class SessionManager:
             "current_lose_streak": self.current_lose_streak,
             "best_win_streak": self.best_win_streak,
             "best_lose_streak": self.best_lose_streak,
+            "last_match": last_m,
+            "by_mode": by_mode,
             "start_time": self.start_time,
             "last_match_time": self.last_match_time
         }

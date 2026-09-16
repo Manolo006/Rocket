@@ -1002,8 +1002,13 @@ function setupBotCompanionSync() {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'game_added') {
-          refresh();
-          showMessage(`Partita registrata dal bot: ${msg.payload.points >= 0 ? '+' : ''}${msg.payload.points}`, false);
+          const gameMode = msg.payload.mode || mode;
+          if (gameMode === mode) {
+            refresh();
+            showMessage(`Partita ${gameMode} registrata automaticamente dal bot: ${msg.payload.points >= 0 ? '+' : ''}${msg.payload.points} MMR`, false);
+          } else {
+            showMessage(`Partita ${gameMode} registrata automaticamente dal bot: ${msg.payload.points >= 0 ? '+' : ''}${msg.payload.points} MMR. <a href="${gameMode}.html" style="color:#60a5fa; text-decoration:underline; font-weight:bold;">Apri ${gameMode}</a>`, false);
+          }
         } else if (msg.type === 'session_started') {
           getSavedGames().then(games => {
             setSessionStartIndex(games.length);

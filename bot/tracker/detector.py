@@ -145,21 +145,38 @@ class MatchDetector:
 
         return None
 
-    def detect_mode_from_items(self, items):
+    def detect_mode_from_items(self, items, frame_width=None, frame_height=None):
         """
         Rileva la modalita (1v1, 2v2, 3v3) contando le righe giocatori distinte
-        nella colonna centrale del tabellone (cx: 360-540, cy: 150-420).
+        nella colonna centrale del tabellone.
+        Supporta sia coordinate normalizzate (per qualsiasi risoluzione) che assolute.
         """
         player_ys = []
         for it in items:
             text = it['text'].strip()
             cx = it['cx']
             cy = it['cy']
-            if 360 <= cx <= 540 and 150 <= cy <= 420:
+
+            is_in_col = False
+            if frame_width and frame_height and frame_width > 0 and frame_height > 0:
+                rel_x = cx / frame_width
+                rel_y = cy / frame_height
+                if 0.30 <= rel_x <= 0.60 and 0.22 <= rel_y <= 0.82:
+                    is_in_col = True
+                    y_key = rel_y
+                    thresh = 0.035
+            else:
+                if 340 <= cx <= 560 and 140 <= cy <= 430:
+                    is_in_col = True
+                    y_key = cy
+                    thresh = 18
+
+            if is_in_col:
                 t_up = text.upper()
-                if not any(k in t_up for k in ['PUNTEGGIO', 'GOL', 'ASSIST', 'PARATE', 'DANNO', 'PING', 'ARANCIONE', 'BLU', 'TEAM', 'TORNEO', 'BUTTON']):
-                    if not any(abs(cy - py) < 18 for py in player_ys):
-                        player_ys.append(cy)
+                if not any(k in t_up for k in ['PUNTEGGIO', 'GOL', 'ASSIST', 'PARATE', 'DANNO', 'PING', 'ARANCIONE', 'BLU', 'TEAM', 'TORNEO', 'BUTTON', 'VINCITORE', 'WINNER', 'PREMI', 'CLASSIFICA', 'SCOREBOARD']):
+                    if not any(abs(y_key - py) < thresh for py in player_ys):
+                        player_ys.append(y_key)
+
         count = len(player_ys)
         if count >= 5:
             return "3v3"
@@ -236,7 +253,8 @@ class MatchDetector:
             p_cy = player_item['cy'] if player_item else None
 
             # Rileva automaticamente la modalita dal tabellone (conteggio giocatori) se disponibile
-            detected_mode = self.detect_mode_from_items(items)
+            h, w = frame.shape[:2]
+            detected_mode = self.detect_mode_from_items(items, frame_width=w, frame_height=h)
             if detected_mode and detected_mode != self.current_mode:
                 print(f"[Detector] Modalita rilevata da tabellone OCR: {detected_mode}")
                 self.set_mode(detected_mode)
@@ -357,11 +375,11 @@ class MatchDetector:
         """
         # 1. Rilevamento automatico della modalita di gioco da log/playlist
         mode_found = None
-        if any(k in line for k in ["RankedSoloDuel"]):
+        if any(k in line for k in ["RankedSoloDuel", "CasualDuel"]):
             mode_found = "1v1"
-        elif any(k in line for k in ["RankedTeamDoubles", "RankedHoops"]):
+        elif any(k in line for k in ["RankedTeamDoubles", "RankedHoops", "CasualDoubles"]):
             mode_found = "2v2"
-        elif any(k in line for k in ["RankedStandard", "RankedBreakout", "RankedRumble", "RankedSnowDay"]):
+        elif any(k in line for k in ["RankedStandard", "RankedBreakout", "RankedRumble", "RankedSnowDay", "CasualStandard"]):
             mode_found = "3v3"
         else:
             m_pl = re.search(r'Playlist(?:Id)?\s*[=:]\s*\(?(\d+)', line)
@@ -369,9 +387,9 @@ class MatchDetector:
                 pid = int(m_pl.group(1))
                 if pid in [1, 10]:
                     mode_found = "1v1"
-                elif pid in [2, 11, 27]:
+                elif pid in [2, 11, 27, 38]:
                     mode_found = "2v2"
-                elif pid in [3, 4, 13, 28, 29, 30]:
+                elif pid in [3, 4, 13, 28, 29, 30, 34]:
                     mode_found = "3v3"
 
         if mode_found and mode_found != self.current_mode:

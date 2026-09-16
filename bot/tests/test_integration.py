@@ -54,6 +54,18 @@ def test_integration():
     assert post_res.status_code == 200
     print('   POST /api/game OK!')
     
+    # Clean up test matches
+    if record_result.get('firebase_id'):
+        fid = record_result['firebase_id']
+        requests.delete(f"{config['firebase_database_url']}/{sync.scope}/games/2v2/{fid}.json")
+    try:
+        data_post = post_res.json()
+        if data_post.get('result', {}).get('firebase_id'):
+            fid2 = data_post['result']['firebase_id']
+            requests.delete(f"{config['firebase_database_url']}/{sync.scope}/games/2v2/{fid2}.json")
+    except Exception:
+        pass
+    
     sync.stop()
     print('\n>>> ALL INTEGRATION TESTS PASSED 100%! <<<')
 

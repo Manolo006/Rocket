@@ -1,4 +1,4 @@
-{
+﻿{
   "active": false,
   "session_id": null,
   "start_time": null,
@@ -16,6 +16,12 @@
     "current_lose_streak": 0,
     "best_win_streak": 0,
     "best_lose_streak": 0,
+    "last_match": null,
+    "by_mode": {
+      "1v1": {"games": 0, "wins": 0, "losses": 0, "balance": 0},
+      "2v2": {"games": 0, "wins": 0, "losses": 0, "balance": 0},
+      "3v3": {"games": 0, "wins": 0, "losses": 0, "balance": 0}
+    },
     "start_time": null,
     "last_match_time": null
   }

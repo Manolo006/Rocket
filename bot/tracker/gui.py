@@ -1,8 +1,10 @@
 import os
 import sys
+import time
+from datetime import datetime
 import webbrowser
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 from pathlib import Path
 
 class TrackerHUD:
@@ -13,8 +15,8 @@ class TrackerHUD:
         self.config = config
 
         self.root = tk.Tk()
-        self.root.title("Rocket Tracker • Companion")
-        self.root.geometry("380x520")
+        self.root.title("Rocket Tracker • Auto Session Monitor")
+        self.root.geometry("380x470")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#0e1322")
@@ -24,42 +26,41 @@ class TrackerHUD:
         self.style.theme_use("clam")
 
         # Variables
-        self.mode_var = tk.StringVar(value=self.config.get("default_mode", "2v2"))
-        self.status_var = tk.StringVar(value="Inizializzazione...")
-        self.points_custom_var = tk.StringVar(value="9")
+        self.mode_var = tk.StringVar(value=self.detector.current_mode)
+        self.status_var = tk.StringVar(value="🟢 Inizializzazione OCR...")
         self.always_on_top_var = tk.BooleanVar(value=True)
+        self.last_match_var = tk.StringVar(value="In attesa della prima partita...")
 
+        self.mode_buttons = {}
         self._build_ui()
 
         # Connect detector callback
         self.detector.set_status_callback(self.update_status_threadsafe)
 
-        # Global key bindings
-        self.root.bind("<F9>", lambda e: self.on_quick_win())
-        self.root.bind("<F10>", lambda e: self.on_quick_loss())
+        # Global key binding for New Session only
         self.root.bind("<F8>", lambda e: self.on_new_session())
 
-        # Start periodic GUI refresh for session stats
+        # Start periodic GUI refresh for session stats and mode sync
         self.refresh_session_ui()
 
     def _build_ui(self):
-        # Header Frame
-        header = tk.Frame(self.root, bg="#161d36", padx=16, pady=12)
+        # 1. Header Frame
+        header = tk.Frame(self.root, bg="#161d36", padx=16, pady=10)
         header.pack(fill="x")
 
-        title_label = tk.Label(header, text="ROCKET TRACKER", font=("Inter", 13, "bold"), fg="#7da7ff", bg="#161d36")
+        title_label = tk.Label(header, text="ROCKET TRACKER • AUTO", font=("Inter", 12, "bold"), fg="#7da7ff", bg="#161d36")
         title_label.pack(side="left")
 
         top_cb = tk.Checkbutton(
-            header, text="Sempre in primo piano", variable=self.always_on_top_var,
+            header, text="In primo piano", variable=self.always_on_top_var,
             command=self.toggle_topmost, bg="#161d36", fg="#a0aec0",
             selectcolor="#0e1322", activebackground="#161d36", font=("Inter", 8)
         )
         top_cb.pack(side="right")
 
-        # Status Bar
+        # 2. Live Status Bar
         self.status_frame = tk.Frame(self.root, bg="#1a223f", padx=12, pady=8)
-        self.status_frame.pack(fill="x", padx=14, pady=(12, 6))
+        self.status_frame.pack(fill="x", padx=14, pady=(10, 6))
 
         self.status_label = tk.Label(
             self.status_frame, textvariable=self.status_var, font=("Inter", 9, "bold"),
@@ -67,69 +68,33 @@ class TrackerHUD:
         )
         self.status_label.pack()
 
-        # Mode Selection
-        mode_frame = tk.LabelFrame(self.root, text=" Modalità di Gioco ", font=("Inter", 9, "bold"),
-                                   fg="#d2d9ff", bg="#0e1322", padx=10, pady=8)
+        # 3. Auto-Detected Lobby Mode Frame
+        mode_frame = tk.LabelFrame(self.root, text=" Modalità Sessione (Rilevata Automaticamente) ",
+                                   font=("Inter", 9, "bold"), fg="#d2d9ff", bg="#0e1322", padx=10, pady=8)
         mode_frame.pack(fill="x", padx=14, pady=6)
 
         btn_box = tk.Frame(mode_frame, bg="#0e1322")
         btn_box.pack(fill="x")
 
         for m in ["1v1", "2v2", "3v3"]:
-            rb = tk.Radiobutton(
-                btn_box, text=m, value=m, variable=self.mode_var, command=self.on_mode_change,
-                font=("Inter", 10, "bold"), fg="#ffffff", bg="#0e1322", selectcolor="#2563eb",
-                indicatoron=0, padx=18, pady=5, activebackground="#3b82f6"
-            )
-            rb.pack(side="left", expand=True, fill="x", padx=3)
-
-        # Quick Actions Frame
-        action_frame = tk.LabelFrame(self.root, text=" Registrazione Rapida ", font=("Inter", 9, "bold"),
-                                     fg="#d2d9ff", bg="#0e1322", padx=10, pady=8)
-        action_frame.pack(fill="x", padx=14, pady=6)
-
-        act_box = tk.Frame(action_frame, bg="#0e1322")
-        act_box.pack(fill="x")
-
-        win_btn = tk.Button(
-            act_box, text="🏆 VITTORIA (+9)\n[F9]", font=("Inter", 10, "bold"),
-            bg="#059669", fg="#ffffff", activebackground="#10b981", activeforeground="#ffffff",
-            relief="flat", padx=10, pady=8, cursor="hand2", command=self.on_quick_win
-        )
-        win_btn.pack(side="left", expand=True, fill="x", padx=3)
-
-        loss_btn = tk.Button(
-            act_box, text="❌ SCONFITTA (-9)\n[F10]", font=("Inter", 10, "bold"),
-            bg="#dc2626", fg="#ffffff", activebackground="#ef4444", activeforeground="#ffffff",
-            relief="flat", padx=10, pady=8, cursor="hand2", command=self.on_quick_loss
-        )
-        loss_btn.pack(side="right", expand=True, fill="x", padx=3)
-
-        # Custom points bar
-        custom_box = tk.Frame(action_frame, bg="#0e1322", pady=6)
-        custom_box.pack(fill="x")
-
-        tk.Label(custom_box, text="Punti custom:", font=("Inter", 8), fg="#94a3b8", bg="#0e1322").pack(side="left")
-        
-        for p in [8, 10]:
             btn = tk.Button(
-                custom_box, text=f"+{p}", font=("Inter", 8, "bold"), bg="#1e293b", fg="#38bdf8",
-                relief="flat", padx=8, pady=2, cursor="hand2",
-                command=lambda val=p: self.on_custom_match(val)
+                btn_box, text=m, font=("Inter", 10, "bold"),
+                fg="#64748b", bg="#131b31", activebackground="#2563eb", activeforeground="#ffffff",
+                relief="flat", padx=12, pady=5, cursor="hand2",
+                command=lambda val=m: self.on_manual_mode_click(val)
             )
-            btn.pack(side="left", padx=2)
+            btn.pack(side="left", expand=True, fill="x", padx=3)
+            self.mode_buttons[m] = btn
 
-        for p in [-8, -10]:
-            btn = tk.Button(
-                custom_box, text=f"{p}", font=("Inter", 8, "bold"), bg="#1e293b", fg="#f87171",
-                relief="flat", padx=8, pady=2, cursor="hand2",
-                command=lambda val=p: self.on_custom_match(val)
-            )
-            btn.pack(side="left", padx=2)
+        self.lbl_mode_detected = tk.Label(
+            mode_frame, text=f"Lobby Rilevata: {self.mode_var.get()} (Auto)",
+            font=("Inter", 8, "italic"), fg="#93c5fd", bg="#0e1322", pady=4
+        )
+        self.lbl_mode_detected.pack()
 
-        # Session Stats Frame
-        stats_frame = tk.LabelFrame(self.root, text=" Sessione Corrente [F8 Nuova] ", font=("Inter", 9, "bold"),
-                                    fg="#d2d9ff", bg="#0e1322", padx=10, pady=8)
+        # 4. Session Scores Frame
+        stats_frame = tk.LabelFrame(self.root, text=" Score della Sessione Corrente ",
+                                    font=("Inter", 9, "bold"), fg="#d2d9ff", bg="#0e1322", padx=10, pady=8)
         stats_frame.pack(fill="x", padx=14, pady=6)
 
         self.stats_grid = tk.Frame(stats_frame, bg="#0e1322")
@@ -138,30 +103,40 @@ class TrackerHUD:
         self.lbl_games = self._make_stat_box(self.stats_grid, 0, 0, "Partite", "0")
         self.lbl_wl = self._make_stat_box(self.stats_grid, 0, 1, "V / S", "0 - 0")
         self.lbl_winrate = self._make_stat_box(self.stats_grid, 0, 2, "Win %", "0%")
-        self.lbl_balance = self._make_stat_box(self.stats_grid, 1, 0, "Bilancio", "0")
+        self.lbl_balance = self._make_stat_box(self.stats_grid, 1, 0, "Bilancio MMR", "0")
         self.lbl_streak = self._make_stat_box(self.stats_grid, 1, 1, "Streak", "0")
         self.lbl_best = self._make_stat_box(self.stats_grid, 1, 2, "Top Win", "0")
 
-        # Session Control Buttons
-        sess_btn_box = tk.Frame(stats_frame, bg="#0e1322", pady=4)
+        # 5. Last Match Box
+        last_match_frame = tk.Frame(stats_frame, bg="#131b31", padx=8, pady=5, relief="groove", borderwidth=1)
+        last_match_frame.pack(fill="x", pady=(8, 2))
+
+        self.lbl_last_match = tk.Label(
+            last_match_frame, textvariable=self.last_match_var,
+            font=("Inter", 8, "bold"), fg="#38bdf8", bg="#131b31", wraplength=320, justify="center"
+        )
+        self.lbl_last_match.pack()
+
+        # 6. Session Controls (New Session + Open Dashboard)
+        sess_btn_box = tk.Frame(self.root, bg="#0e1322", padx=14, pady=8)
         sess_btn_box.pack(fill="x")
 
         new_sess_btn = tk.Button(
-            sess_btn_box, text="🔄 Nuova Sessione", font=("Inter", 8, "bold"),
+            sess_btn_box, text="🔄 Nuova Sessione [F8]", font=("Inter", 9, "bold"),
             bg="#2563eb", fg="#ffffff", activebackground="#3b82f6", relief="flat",
-            padx=8, pady=4, cursor="hand2", command=self.on_new_session
+            padx=10, pady=6, cursor="hand2", command=self.on_new_session
         )
-        new_sess_btn.pack(side="left", expand=True, fill="x", padx=2)
+        new_sess_btn.pack(side="left", expand=True, fill="x", padx=3)
 
         dash_btn = tk.Button(
-            sess_btn_box, text="🌐 Apri Dashboard", font=("Inter", 8, "bold"),
+            sess_btn_box, text="🌐 Apri Dashboard Web", font=("Inter", 9, "bold"),
             bg="#1e293b", fg="#93c5fd", activebackground="#334155", relief="flat",
-            padx=8, pady=4, cursor="hand2", command=self.open_dashboard
+            padx=10, pady=6, cursor="hand2", command=self.open_dashboard
         )
-        dash_btn.pack(side="right", expand=True, fill="x", padx=2)
+        dash_btn.pack(side="right", expand=True, fill="x", padx=3)
 
     def _make_stat_box(self, parent, row, col, label_text, default_val):
-        frame = tk.Frame(parent, bg="#131b31", padx=6, pady=4, relief="groove", borderwidth=1)
+        frame = tk.Frame(parent, bg="#131b31", padx=6, pady=5, relief="groove", borderwidth=1)
         frame.grid(row=row, column=col, sticky="nsew", padx=2, pady=2)
         parent.grid_columnconfigure(col, weight=1)
 
@@ -176,31 +151,18 @@ class TrackerHUD:
     def toggle_topmost(self):
         self.root.attributes("-topmost", self.always_on_top_var.get())
 
-    def on_mode_change(self):
-        new_mode = self.mode_var.get()
-        self.detector.set_mode(new_mode)
-
-    def on_quick_win(self):
-        mode = self.mode_var.get()
-        pts = self.config.get("win_points", 9)
-        self.detector.trigger_match_result(is_win=True, points=pts)
-
-    def on_quick_loss(self):
-        mode = self.mode_var.get()
-        pts = self.config.get("loss_points", -9)
-        self.detector.trigger_match_result(is_win=False, points=pts)
-
-    def on_custom_match(self, points):
-        mode = self.mode_var.get()
-        is_win = points > 0
-        self.detector.trigger_match_result(is_win=is_win, points=points)
+    def on_manual_mode_click(self, mode):
+        self.mode_var.set(mode)
+        self.detector.set_mode(mode)
+        self._update_mode_badges(mode)
 
     def on_new_session(self):
         self.session_manager.start_new_session()
+        self.last_match_var.set("Nuova sessione avviata! In attesa di partite...")
         self.update_status_threadsafe("Nuova sessione avviata!")
 
     def open_dashboard(self):
-        mode = self.mode_var.get()
+        mode = self.detector.current_mode or self.mode_var.get()
         url = f"https://manolo006.github.io/Rocket/{mode}.html"
         webbrowser.open(url)
 
@@ -209,8 +171,24 @@ class TrackerHUD:
             self.status_var.set(text)
         self.root.after(0, _update)
 
+    def _update_mode_badges(self, active_mode):
+        for m, btn in self.mode_buttons.items():
+            if m == active_mode:
+                btn.config(bg="#2563eb", fg="#ffffff")
+            else:
+                btn.config(bg="#131b31", fg="#64748b")
+        if hasattr(self, 'lbl_mode_detected'):
+            self.lbl_mode_detected.config(text=f"Lobby Rilevata: {active_mode} (Automatico • Punti a {active_mode})")
+
     def refresh_session_ui(self):
         try:
+            # 1. Sync detected mode from detector
+            active_mode = self.detector.current_mode
+            if active_mode and active_mode != self.mode_var.get():
+                self.mode_var.set(active_mode)
+            self._update_mode_badges(self.mode_var.get())
+
+            # 2. Update session scores
             summary = self.session_manager.get_summary()
             total = summary.get("total_games", 0)
             wins = summary.get("wins", 0)
@@ -232,6 +210,16 @@ class TrackerHUD:
             streak_str = f"{streak:+d}" if streak != 0 else "0"
             self.lbl_streak.config(text=streak_str)
             self.lbl_best.config(text=str(best_win))
+
+            # 3. Update last match text
+            last_m = summary.get("last_match")
+            if last_m:
+                m_mode = last_m.get("mode", "2v2")
+                m_pts = last_m.get("points", 0)
+                m_res = "Vittoria" if m_pts > 0 else "Sconfitta"
+                m_time = datetime.fromtimestamp(last_m.get("timestamp", time.time())).strftime("%H:%M")
+                icon = "🏆" if m_pts > 0 else "❌"
+                self.last_match_var.set(f"{icon} Ultimo match: {m_mode} • {m_res} ({m_pts:+d} MMR) [{m_time}]")
         except Exception:
             pass
 
@@ -239,8 +227,8 @@ class TrackerHUD:
         timeout = self.config.get("auto_session_timeout_minutes", 45)
         self.session_manager.check_auto_session_timeout(timeout)
 
-        # Refresh every 1000ms
-        self.root.after(1000, self.refresh_session_ui)
+        # Refresh every 600ms
+        self.root.after(600, self.refresh_session_ui)
 
     def start(self):
         self.root.mainloop()
